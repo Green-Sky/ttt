@@ -13,6 +13,7 @@ struct TorrentToxInfo {
 struct TorrentDB {
 	struct TorrentEntry {
 		//Torrent torrent;
+		bool self {false};
 		TorrentToxInfo torrent_tox_info {};
 	};
 	std::unordered_map<Torrent, TorrentEntry> torrents;

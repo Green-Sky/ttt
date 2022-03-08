@@ -1,14 +1,18 @@
 #include "./torrent_db.hpp"
 
+#include "./tracker.hpp"
+
 #include <mutex>
 #include <thread>
 #include <iostream>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 static TorrentDB torrent_db {};
 static std::mutex torrent_db_mutex;
 
-std::ostream& operator<<(std::ostream& os, const Torrent& t) {
+static std::ostream& operator<<(std::ostream& os, const Torrent& t) {
 	if (t.info_hash_v1) {
 		os << "v1:" << std::to_string(*t.info_hash_v1) << ";";
 	}
@@ -21,6 +25,8 @@ std::ostream& operator<<(std::ostream& os, const Torrent& t) {
 }
 
 int main(int argc, char** argv) {
+	(void)argc;
+	(void)argv;
 
 	{ // dummy data
 		const std::lock_guard mutex_lock(torrent_db_mutex);
@@ -46,8 +52,7 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	{ // http tracker thread
-	}
+	ttt::tracker_start(torrent_db, torrent_db_mutex);
 
 	{ // main thread (cli)
 		while (true) {
@@ -55,6 +60,8 @@ int main(int argc, char** argv) {
 			std::this_thread::sleep_for(10ms);
 		}
 	}
+
+	ttt::tracker_stop();
 
 	return 0;
 }

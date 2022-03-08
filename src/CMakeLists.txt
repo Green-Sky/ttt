@@ -2,19 +2,38 @@ cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
 
 project(tox_torrent_tunnel C CXX)
 
-add_library(tox_torrent_tunnel_libs STATIC
+########################################
+
+add_library(torrent_base_lib STATIC
 	./torrent.hpp
 	./torrent.cpp
 	./torrent_db.hpp
 )
 
-target_compile_features(tox_torrent_tunnel_libs PUBLIC cxx_std_17)
+target_compile_features(torrent_base_lib PUBLIC cxx_std_17)
+
+########################################
+
+add_library(torrent_tracker_lib STATIC
+	./tracker.hpp
+	./tracker.cpp
+)
+
+target_compile_features(torrent_tracker_lib PUBLIC cxx_std_17)
+
+target_link_libraries(torrent_tracker_lib
+	torrent_base_lib
+	mongoose
+)
+
+########################################
 
 add_executable(tox_torrent_tunnel
 	./standalone.cpp
 )
 
 target_link_libraries(tox_torrent_tunnel
-	tox_torrent_tunnel_libs
+	torrent_base_lib
+	torrent_tracker_lib
 )
 
