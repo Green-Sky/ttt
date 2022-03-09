@@ -29,6 +29,8 @@ target_link_libraries(torrent_tracker_lib
 ########################################
 
 add_executable(tox_torrent_tunnel
+	./tox_client.hpp
+	./tox_client.cpp
 	./standalone.cpp
 )
 

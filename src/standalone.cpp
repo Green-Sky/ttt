@@ -1,6 +1,7 @@
 #include "./torrent_db.hpp"
 
 #include "./tracker.hpp"
+#include "tox_client.hpp"
 
 #include <mutex>
 #include <thread>
@@ -52,7 +53,11 @@ int main(int argc, char** argv) {
 		}
 	}
 
+	ttt::tox_client_start(torrent_db, torrent_db_mutex);
+
 	ttt::tracker_start(torrent_db, torrent_db_mutex);
+
+	ttt::tox_add_friend("4159D7CF1C51430FA28EFEFFD2CCF0172632AA55C64B4CD145564D4F4853342F74C87EC2CFF0");
 
 	{ // main thread (cli)
 		while (true) {

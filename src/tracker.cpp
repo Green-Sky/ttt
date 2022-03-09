@@ -11,6 +11,18 @@
 #include <unordered_map>
 #include <vector>
 
+static std::ostream& operator<<(std::ostream& os, const Torrent& t) {
+	if (t.info_hash_v1) {
+		os << "v1:" << std::to_string(*t.info_hash_v1) << ";";
+	}
+
+	if (t.info_hash_v2) {
+		os << "v2:" << std::to_string(*t.info_hash_v2) << ";";
+	}
+
+	return os;
+}
+
 // src : https://marcoarena.wordpress.com/2017/01/03/string_view-odi-et-amo/
 static std::vector<std::string_view> split(std::string_view str, const char* delims) {
 	std::vector<std::string_view> ret;
@@ -208,9 +220,10 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 
 			// TODO: replace with messaging ?
 			const std::lock_guard mutex_lock(_tracker->torrent_db_mutex);
-			if (_tracker->torrent_db.torrents.count(t)) {
+			if (!_tracker->torrent_db.torrents.count(t)) {
 				auto& new_entry = _tracker->torrent_db.torrents[t];
 				new_entry.self = true;
+				std::cout << "III new info_hash" << t << "\n";
 			}
 
 			// TODO: timestamp
@@ -222,19 +235,23 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 				uint16_t port {20111};
 			};
 
-			Peer example_peer{};
+			std::vector<Peer> peer_list{};
+			peer_list.emplace_back(); // default
 
-			std::vector<std::string> response_peer_list{
-				"d" +
-					to_bencode("ip") + to_bencode(example_peer.ip) +
-					to_bencode("port") + to_bencode(example_peer.port) +
-				"e"
-			};
+			std::vector<std::string> response_peer_list{};
+			for (const auto& peer : peer_list) {
+				response_peer_list.emplace_back(
+					"d" +
+						to_bencode("ip") + to_bencode(peer.ip) +
+						to_bencode("port") + to_bencode(peer.port) +
+					"e"
+				);
+			}
 
 			// response dict key is plain, value is bencoded
 			std::unordered_map<std::string, std::string> response_dict{
 				{"interval", to_bencode(60)}, // 60s
-				{"peers", "l" + response_peer_list[0] + "e"},
+				{"peers", "l" + response_peer_list[0] + "e"}, // TODO: more peers
 			};
 
 			// eg:
@@ -267,7 +284,7 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 static void http_fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 	if (ev == MG_EV_HTTP_MSG) {
 		mg_http_message* hm = (mg_http_message *) ev_data;
-		std::cerr << "got request:" << std::string(hm->message.ptr, 0, hm->message.len) << "\n";
+		//std::cerr << "got request:" << std::string(hm->message.ptr, 0, hm->message.len) << "\n";
 		if (mg_http_match_uri(hm, "/announce")) {
 			http_handle_announce(c, hm);
 
