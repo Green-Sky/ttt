@@ -7,6 +7,9 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <fstream>
+#include <map>
+#include <functional>
 #include <cstring>
 #include <cassert>
 
@@ -21,8 +24,37 @@ struct ToxClient {
 	ToxClient(TorrentDB& torrent_db_, std::mutex& torrent_db_mutex_) : torrent_db(torrent_db_), torrent_db_mutex(torrent_db_mutex_) {
 	}
 
+	~ToxClient(void) {
+		if (tox) {
+			tox_kill(tox);
+			tox = nullptr;
+		}
+	}
+
 
 	Tox* tox = nullptr;
+
+	std::string savedata_filename {"ttt.tox"};
+	bool state_dirty_save_soon {false}; // set in callbacks
+
+	enum PermLevel {
+		NONE,
+		USER,
+		ADMIN,
+	};
+	std::map<uint32_t, PermLevel> friend_perms {
+		{0, ADMIN} // HACK: make first friend admin
+	};
+	PermLevel friend_default_perm = USER;
+
+	// perm level equal or greater
+	bool friend_has_perm(const uint32_t friend_number, const PermLevel perm) {
+		if (!friend_perms.count(friend_number)) {
+			friend_perms[friend_number] = friend_default_perm;
+		}
+
+		return friend_perms[friend_number] >= perm;
+	}
 
 	std::thread thread;
 };
@@ -30,24 +62,31 @@ struct ToxClient {
 static std::unique_ptr<ToxClient> _tox_client;
 static std::mutex _tox_client_mutex;
 
-static void tox_client_setup(void);
+static void tox_client_save(void);
+static bool tox_client_setup(void);
 
 static void tox_client_thread_fn(void);
 
-void tox_client_start(TorrentDB& torrent_db, std::mutex& torrent_db_mutex) {
+bool tox_client_start(TorrentDB& torrent_db, std::mutex& torrent_db_mutex) {
 	const std::lock_guard lock(_tox_client_mutex);
 
 	if (_tox_client) {
 		std::cerr << "tox_client already running!!!!!!!!\n";
-		return;
+		return false;
 	}
 
 	_tox_client = std::make_unique<ToxClient>(torrent_db, torrent_db_mutex);
 
-	tox_client_setup();
+	if (!tox_client_setup()) { // error
+		_tox_client.reset(nullptr);
+		return false;
+	}
+
+	// TODO: block and stall until connected to dht
 
 	_tox_client->thread = std::thread(tox_client_thread_fn);
 
+	return true;
 }
 
 void tox_client_stop(void) {
@@ -99,6 +138,18 @@ static std::string tox_get_own_address(const Tox *tox) {
 	return own_tox_id_stringyfied;
 }
 
+static void tox_client_save(void) {
+	std::vector<uint8_t> savedata{};
+	savedata.resize(tox_get_savedata_size(_tox_client->tox));
+	tox_get_savedata(_tox_client->tox, savedata.data());
+	std::ofstream ofile{_tox_client->savedata_filename, std::ios::binary};
+	for (const auto& ch : savedata) {
+		ofile.put(ch);
+	}
+	//ofile.flush();
+	ofile.close(); // TODO: do i need this
+}
+
 // ============ tox callbacks ============
 
 // logging
@@ -132,7 +183,7 @@ static void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE
 //static void conference_peer_list_changed_cb(Tox *tox, uint32_t conference_number, void *user_data);
 
 // custom packets
-//static void friend_lossy_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *user_data);
+static void friend_lossy_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *user_data);
 static void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *user_data);
 
 
@@ -162,32 +213,62 @@ static void tox_client_setup_callbacks(Tox* tox) {
 	//CALLBACK_REG(conference_peer_name);
 	//CALLBACK_REG(conference_peer_list_changed);
 
-	//CALLBACK_REG(friend_lossy_packet);
+	CALLBACK_REG(friend_lossy_packet);
 	CALLBACK_REG(friend_lossless_packet);
 
 #undef CALLBACK_REG
 }
 
-static void tox_client_setup(void) {
-	TOX_ERR_OPTIONS_NEW err_opt_new;
-	Tox_Options* options = tox_options_new(&err_opt_new);
-	assert(err_opt_new == TOX_ERR_OPTIONS_NEW::TOX_ERR_OPTIONS_NEW_OK);
-	tox_options_set_log_callback(options, log_cb);
+static bool tox_client_setup(void) {
+	{ // scope for save data (optional)
+		TOX_ERR_OPTIONS_NEW err_opt_new;
+		Tox_Options* options = tox_options_new(&err_opt_new);
+		assert(err_opt_new == TOX_ERR_OPTIONS_NEW::TOX_ERR_OPTIONS_NEW_OK);
+		tox_options_set_log_callback(options, log_cb);
 #ifndef USE_TEST_NETWORK
-	tox_options_set_local_discovery_enabled(options, true);
+		tox_options_set_local_discovery_enabled(options, true);
 #endif
-	tox_options_set_udp_enabled(options, true);
-	tox_options_set_hole_punching_enabled(options, true);
+		tox_options_set_udp_enabled(options, true);
+		tox_options_set_hole_punching_enabled(options, true);
 
-	// TODO: save
+		std::ifstream ifile{_tox_client->savedata_filename, std::ios::binary};
+		std::vector<uint8_t> savedata{};
+		if (ifile.is_open()) {
+			std::cout << "TOX loading save " << _tox_client->savedata_filename << "\n";
+			// fill savedata
+			while (ifile.good()) {
+				auto ch = ifile.get();
+				if (ch == EOF) {
+					break;
+				} else {
+					savedata.push_back(ch);
+				}
+			}
 
-	TOX_ERR_NEW err_new;
-	_tox_client->tox = tox_new(options, &err_new);
-	if (err_new != TOX_ERR_NEW_OK) {
-		std::cerr << "tox_new failed with error code " << err_new << "\n";
-		//return false;
-		return;
+			if (savedata.empty()) {
+				std::cerr << "empty tox save\n";
+			} else {
+				// set options
+				tox_options_set_savedata_type(options, TOX_SAVEDATA_TYPE_TOX_SAVE);
+				tox_options_set_savedata_data(options, savedata.data(), savedata.size());
+
+				// ignore free, savedata gets out of scope eventually...
+			}
+
+			ifile.close(); // do i need this?
+		}
+
+		TOX_ERR_NEW err_new;
+		_tox_client->tox = tox_new(options, &err_new);
+		tox_options_free(options);
+		if (err_new != TOX_ERR_NEW_OK) {
+			std::cerr << "tox_new failed with error code " << err_new << "\n";
+			return false;
+		}
 	}
+
+	// immediatly save
+	tox_client_save();
 
 	// print own address
 	std::cout << "created tox instance with addr:" << tox_get_own_address(_tox_client->tox) << "\n";
@@ -253,18 +334,35 @@ static void tox_client_setup(void) {
 
 	const char *status_message = "toxorrenting";
 	tox_self_set_status_message(_tox_client->tox, reinterpret_cast<const uint8_t*>(status_message), std::strlen(status_message), NULL);
+
+	return true;
 }
 
 static void tox_client_thread_fn(void) {
+	const float save_interval = 60.f * 15.f;
+	float save_timer = save_interval/2.f; // initial save
 	while (true) {
 		{ // lock sope
 			const std::lock_guard lock(_tox_client_mutex);
 			tox_iterate(_tox_client->tox, nullptr);
+
+			if (save_timer >= save_interval || _tox_client->state_dirty_save_soon) {
+				save_timer = 0.f;
+				_tox_client->state_dirty_save_soon = false;
+				std::cerr << "TOX III SAVE\n";
+
+				tox_client_save();
+			}
 		}
 
 		using namespace std::literals;
 		std::this_thread::sleep_for(5ms);
+		save_timer += 0.005f;
 	}
+}
+
+static void tox_friend_send_message(const uint32_t friend_number, const TOX_MESSAGE_TYPE type, const std::string& msg) {
+	tox_friend_send_message(_tox_client->tox, friend_number, type, reinterpret_cast<const uint8_t*>(msg.data()), msg.size(), nullptr);
 }
 
 // logging
@@ -275,6 +373,7 @@ static void log_cb(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_t lin
 // self
 static void self_connection_status_cb(Tox *tox, TOX_CONNECTION connection_status, void *) {
 	std::cout << "self_connection_status_cb\n";
+	_tox_client->state_dirty_save_soon = true;
 }
 
 // friend
@@ -285,30 +384,148 @@ static void friend_name_cb(Tox *tox, uint32_t friend_number, const uint8_t *name
 //static void friend_status_cb(Tox *tox, uint32_t friend_number, TOX_USER_STATUS status, void *user_data);
 static void friend_connection_status_cb(Tox *tox, uint32_t friend_number, TOX_CONNECTION connection_status, void *) {
 	std::cout << "friend_connection_status_cb\n";
+	_tox_client->state_dirty_save_soon = true;
 }
 //static void friend_typing_cb(Tox *tox, uint32_t friend_number, bool is_typing, void *user_data);
 //static void friend_read_receipt_cb(Tox *tox, uint32_t friend_number, uint32_t message_id, void *user_data);
 static void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *message, size_t length, void *) {
 	std::cout << "friend_request_cb\n";
 	// DIRTY HACK
-	//if (public_key[0] == 0x41 && public_key[1] == 0x59) {
-		tox_friend_add_norequest(tox, public_key, nullptr);
-	//}
+	tox_friend_add_norequest(tox, public_key, nullptr);
+	_tox_client->state_dirty_save_soon = true;
 }
+
+static void chat_command_help(uint32_t friend_number, std::string_view params);
+static void chat_command_list(uint32_t friend_number, std::string_view params);
+
+struct ChatCommand {
+	ToxClient::PermLevel perm_level {ToxClient::PermLevel::ADMIN}; // default to admin, just in case
+
+	std::function<void(uint32_t friend_number, std::string_view params)> fn;
+
+	std::string desc {}; // for help
+};
+// ordered :P
+const static std::map<std::string, ChatCommand> chat_commands {
+	// general
+	{{"help"},					{ToxClient::PermLevel::USER, chat_command_help, "list this help"}},
+	{{"info"},					{ToxClient::PermLevel::USER, [](auto, auto){}, "general info, including tracker url, friend count, uptime and transfer rates"}},
+	{{"list"},					{ToxClient::PermLevel::USER, chat_command_list, "lists info hashes"}},
+	{{"list_magnet"},			{ToxClient::PermLevel::USER, [](auto, auto){}, "lists info hashes as magnet links"}},
+	{{"myaddress"},				{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "get the address to add"}},
+
+	{{"tox_restart"},			{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "restarts the tox thread"}},
+
+	// friends
+	{{"friend_list"},			{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "list friends (with perm)"}},
+	{{"friend_add"},			{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<addr> - add friend"}},
+	{{"friend_remove"},			{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<pubkey> - remove friend"}},
+	{{"friend_permission_set"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<pubkey> <permlvl> - set permission level for fiend"}},
+	{{"friend_permission_get"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<pubkey>"}},
+	//{{"friend_allow_transfer"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<pubkey> - allow a friend to use ttt"}},
+
+	// todo: ngc
+
+	// tunnel
+	{{"tunnel_set_host"},		{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<string> - sets a new tunnel host, default is localhost, but torrentclients tend to ignore loopback addr"}},
+	{{"tunnel_get_host"},		{ToxClient::PermLevel::ADMIN, [](auto, auto){}, ""}},
+
+	// TODO: move this comment to help
+	// this info is used for remote peers trying to connect. (todo: implement tracker defined port, since it knows)
+	{{"torrent_client_host_set"}, {ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<string> - sets the host your torrent program is running on, defualt is localhost"}},
+	{{"torrent_client_host_get"}, {ToxClient::PermLevel::ADMIN, [](auto, auto){}, ""}},
+	{{"torrent_client_port_set"}, {ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<string> - sets the port your torrent program is running on, defualt is 51413"}},
+	{{"torrent_client_port_get"}, {ToxClient::PermLevel::ADMIN, [](auto, auto){}, ""}},
+
+	// tracker
+	{{"tracker_restart"},		{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "restarts the tracker thread"}},
+	{{"tracker_http_host_set"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<string> - sets the trackers listen host, default is localhost. only change this if you want it to be reachalbe from elsewhere."}},
+	{{"tracker_http_host_get"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, ""}},
+	{{"tracker_http_port_set"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<string> - sets the trackers listen port, default is 8000."}},
+	{{"tracker_http_port_get"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, ""}},
+};
+static void chat_command_help(uint32_t friend_number, std::string_view) {
+	std::string reply {};
+	reply += "commands:\n";
+	for (const auto& [cmd_str, cmd] : chat_commands) {
+		if (_tox_client->friend_has_perm(friend_number, cmd.perm_level)) {
+			reply += "  !" + cmd_str + " " + cmd.desc + "\n";
+		}
+	}
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reply);
+}
+
+static void chat_command_list(uint32_t friend_number, std::string_view) {
+	std::string reply {"currently indexed:\n"};
+	{
+		const std::lock_guard mutex_lock(_tox_client->torrent_db_mutex);
+			for (const auto& entry : _tox_client->torrent_db.torrents) {
+				reply += "  - ";
+
+				if (entry.first.info_hash_v1) {
+					reply += "v1:" + std::to_string(*entry.first.info_hash_v1) + ";";
+				}
+
+				if (entry.first.info_hash_v2) {
+					reply += "v2:" + std::to_string(*entry.first.info_hash_v2) + ";";
+				}
+
+				reply += "\n";
+			}
+	}
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reply);
+}
+
 static void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, const uint8_t *message, size_t length, void *) {
 	std::cout << "friend_message_cb\n";
+
+	if (!_tox_client->friend_has_perm(friend_number, ToxClient::PermLevel::USER)) {
+		std::string reply {"you dont have permission to use this bot"};
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reply);
+		return;
+	}
+
 	if (length < 2) {
 		return;
 	}
 
+
+	// size check was before, so atleast 2 chars
 	std::string_view m_view(reinterpret_cast<const char*>(message), length);
+	if (m_view[0] != '!') {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, "not a command, type !help to learn more.");
+		return;
+	}
+	m_view = m_view.substr(1); // cut first char
+
+	std::string_view mc = m_view;
+	auto f_pos = m_view.find(' ');
+	if (f_pos != m_view.npos) {
+		mc.remove_suffix(mc.size()-f_pos);
+	}
+
+	std::string mc_str {mc}; // waiting for c++20
+	if (!chat_commands.count(mc_str)) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, "invalid command, type !help to learn more.");
+		return;
+	}
+
+	const auto& cmd = chat_commands.at(mc_str);
+	if (!_tox_client->friend_has_perm(friend_number, cmd.perm_level)) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, "missing permissions");
+		return;
+	}
+
+	// TODO: fix param
+	if (!cmd.fn) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, "missing command implementation, screen at green!");
+		return;
+	}
+	cmd.fn(friend_number, m_view);
+
+#if 0
 	if (m_view == "!help") {
-		std::string reply {
-			"!help this message\n"
-			"!info hash list"
-		};
-		tox_friend_send_message(tox, friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reinterpret_cast<const uint8_t*>(reply.data()), reply.size(), nullptr);
-	} else if (m_view == "!info") {
+	} else if (m_view == "!list") {
 		std::string reply {"currently indexed:\n"};
 		{
 			const std::lock_guard mutex_lock(_tox_client->torrent_db_mutex);
@@ -326,8 +543,9 @@ static void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE
 					reply += "\n";
 				}
 		}
-		tox_friend_send_message(tox, friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reinterpret_cast<const uint8_t*>(reply.data()), reply.size(), nullptr);
+		tox_friend_send_message(tox, friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reply);
 	}
+#endif
 }
 
 // file
@@ -345,9 +563,13 @@ static void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE
 //static void conference_peer_list_changed_cb(Tox *tox, uint32_t conference_number, void *user_data);
 
 // custom packets
-//static void friend_lossy_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *user_data);
+static void friend_lossy_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *user_data) {
+	std::cout << "friend_lossy_packet_cb\n";
+}
+
 static void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *user_data) {
 	std::cout << "friend_lossless_packet_cb\n";
 }
 
 } // ttt
+

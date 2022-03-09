@@ -29,6 +29,7 @@ int main(int argc, char** argv) {
 	(void)argc;
 	(void)argv;
 
+#if 0
 	{ // dummy data
 		const std::lock_guard mutex_lock(torrent_db_mutex);
 
@@ -52,12 +53,21 @@ int main(int argc, char** argv) {
 			}
 		}
 	}
+#endif
 
-	ttt::tox_client_start(torrent_db, torrent_db_mutex);
+	if (!ttt::tox_client_start(torrent_db, torrent_db_mutex)) {
+		return -1;
+	}
 
 	ttt::tracker_start(torrent_db, torrent_db_mutex);
 
-	ttt::tox_add_friend("4159D7CF1C51430FA28EFEFFD2CCF0172632AA55C64B4CD145564D4F4853342F74C87EC2CFF0");
+#if 0
+	{ // hack pause main thread for 30s to wait for dht
+		using namespace std::literals;
+		std::this_thread::sleep_for(30s);
+		ttt::tox_add_friend("4159D7CF1C51430FA28EFEFFD2CCF0172632AA55C64B4CD145564D4F4853342F74C87EC2CFF0");
+	}
+#endif
 
 	{ // main thread (cli)
 		while (true) {
