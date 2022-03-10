@@ -4,8 +4,11 @@
 #include <map>
 #include <functional>
 #include <mutex>
+#include <tox/tox.h>
 
 namespace ttt {
+
+//void chat_command_(uint32_t friend_number, std::string_view params);
 
 // ordered :P
 const static std::map<std::string, ChatCommand> chat_commands = {
@@ -13,17 +16,17 @@ const static std::map<std::string, ChatCommand> chat_commands = {
 	{{"help"},					{ToxClient::PermLevel::USER, chat_command_help, "list this help"}},
 	{{"info"},					{ToxClient::PermLevel::USER, [](auto, auto){}, "general info, including tracker url, friend count, uptime and transfer rates"}},
 	{{"list"},					{ToxClient::PermLevel::USER, chat_command_list, "lists info hashes"}},
-	{{"list_magnet"},			{ToxClient::PermLevel::USER, [](auto, auto){}, "lists info hashes as magnet links"}},
-	{{"myaddress"},				{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "get the address to add"}},
+	{{"list_magnet"},			{ToxClient::PermLevel::USER, chat_command_list_magnet, "lists info hashes as magnet links"}},
+	{{"myaddress"},				{ToxClient::PermLevel::ADMIN, chat_command_myaddress, "get the address to add"}},
 
 	{{"tox_restart"},			{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "restarts the tox thread"}},
 
 	// friends
-	{{"friend_list"},			{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "list friends (with perm)"}},
-	{{"friend_add"},			{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<addr> - add friend"}},
-	{{"friend_remove"},			{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<pubkey> - remove friend"}},
-	{{"friend_permission_set"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<pubkey> <permlvl> - set permission level for fiend"}},
-	{{"friend_permission_get"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<pubkey>"}},
+	{{"friend_list"},			{ToxClient::PermLevel::ADMIN, chat_command_friend_list, "list friends (with perm)"}},
+	{{"friend_add"},			{ToxClient::PermLevel::ADMIN, chat_command_friend_add, "<addr> - add friend"}},
+	{{"friend_remove"},			{ToxClient::PermLevel::ADMIN, chat_command_friend_remove, "<pubkey> - remove friend"}},
+	{{"friend_permission_set"},	{ToxClient::PermLevel::ADMIN, chat_command_friend_permission_set, "<pubkey> <permlvl> - set permission level for fiend"}},
+	{{"friend_permission_get"},	{ToxClient::PermLevel::ADMIN, chat_command_friend_permission_get, "<pubkey>"}},
 	//{{"friend_allow_transfer"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<pubkey> - allow a friend to use ttt"}},
 
 	// todo: ngc
@@ -112,6 +115,86 @@ void chat_command_list(uint32_t friend_number, std::string_view) {
 			}
 	}
 	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reply);
+}
+
+void chat_command_list_magnet(uint32_t friend_number, std::string_view) {
+	std::string reply {"currently indexed:\n"};
+	{
+		const std::lock_guard mutex_lock(_tox_client->torrent_db_mutex);
+			for (const auto& entry : _tox_client->torrent_db.torrents) {
+				reply += "  - ";
+
+				//v1: magnet:?xt=urn:btih:<info-hash>&dn=<name>&tr=<tracker-url>&x.pe=<peer-address>
+				if (entry.first.info_hash_v1) {
+					reply += "  magnet:?xt=urn:btih:" + std::to_string(*entry.first.info_hash_v1)
+						//+ "dn=name" // TODO: more meta info
+						+ "tr=http://localhost:8000/announce" // TODO: fetch tacker url
+						//+ "x.pe=localhost:5555" // TODO: even peers
+					;
+
+				}
+
+				// TODO: v2 (not magnet v2, magnets for torrent v2)
+#if 0
+				if (entry.first.info_hash_v2) {
+					reply += "v2:" + std::to_string(*entry.first.info_hash_v2) + ";";
+				}
+#endif
+
+				reply += "\n";
+			}
+	}
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reply);
+}
+
+void chat_command_myaddress(uint32_t friend_number, std::string_view) {
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, tox_get_own_address(_tox_client->tox));
+}
+
+void chat_command_friend_list(uint32_t friend_number, std::string_view params) {
+	std::vector<uint32_t> friend_list;
+	friend_list.resize(tox_self_get_friend_list_size(_tox_client->tox));
+	tox_self_get_friend_list(_tox_client->tox, friend_list.data());
+
+	std::string reply {"friend list: (count: " + std::to_string(friend_list.size()) + ")\n"};
+
+	// TODO: propper error checking
+	for (uint32_t friend_list_number : friend_list) {
+		TOX_ERR_FRIEND_QUERY err_f_query;
+
+		////f.connection_status = tox_friend_get_connection_status(_tox, friend_number, &err_f_query);
+		////assert(err_f_query == TOX_ERR_FRIEND_QUERY_OK);
+
+		std::string f_name{};
+		f_name.resize(tox_friend_get_name_size(_tox_client->tox, friend_list_number, &err_f_query));
+		//assert(err_f_query == TOX_ERR_FRIEND_QUERY_OK);
+		tox_friend_get_name(_tox_client->tox, friend_list_number, reinterpret_cast<uint8_t*>(f_name.data()), &err_f_query);
+		//assert(err_f_query == TOX_ERR_FRIEND_QUERY_OK);
+
+		std::array<uint8_t, TOX_PUBLIC_KEY_SIZE> f_pubkey_binary;
+		tox_friend_get_public_key(_tox_client->tox, friend_list_number, f_pubkey_binary.data(), nullptr);
+
+		std::string f_pubkey;
+		f_pubkey.resize(f_pubkey_binary.size()*2 + 1, '\0');
+		sodium_bin2hex(f_pubkey.data(), f_pubkey.size(), f_pubkey_binary.data(), f_pubkey_binary.size());
+		f_pubkey.resize(f_pubkey_binary.size()*2); // remove '\0'
+
+		reply += "  " + f_name + ": " + f_pubkey + "\n";
+	}
+
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reply);
+}
+
+void chat_command_friend_add(uint32_t friend_number, std::string_view params) {
+}
+
+void chat_command_friend_remove(uint32_t friend_number, std::string_view params) {
+}
+
+void chat_command_friend_permission_set(uint32_t friend_number, std::string_view params) {
+}
+
+void chat_command_friend_permission_get(uint32_t friend_number, std::string_view params) {
 }
 
 } // ttt
