@@ -229,8 +229,8 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 			// TODO: timestamp
 
 			struct Peer {
-				//std::string ip {"127.0.0.1"};
-				std::string ip {"192.168.1.179"};
+				std::string ip {"127.0.0.1"};
+				//std::string ip {"192.168.1.179"};
 				//std::string ip {"127.255.1.1"};
 				uint16_t port {20111};
 			};

@@ -29,8 +29,12 @@ target_link_libraries(torrent_tracker_lib
 ########################################
 
 add_executable(tox_torrent_tunnel
+	./tox_client_private.hpp
+	./tox_client_private.cpp
 	./tox_client.hpp
 	./tox_client.cpp
+	./tox_chat_commands.hpp
+	./tox_chat_commands.cpp
 	./standalone.cpp
 )
 
