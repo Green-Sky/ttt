@@ -14,6 +14,7 @@
 #include <cassert>
 
 #include <iostream>
+#include <vector>
 
 namespace ttt {
 
@@ -65,7 +66,10 @@ extern std::mutex _tox_client_mutex;
 
 void tox_client_save(void);
 
-void tox_add_friend(const std::string& addr);
+std::vector<uint8_t> hex2bin(const std::string& str);
+std::string bin2hex(const std::vector<uint8_t>& bin);
+
+bool tox_add_friend(const std::string& addr);
 
 std::string tox_get_own_address(const Tox *tox);
 

@@ -1,9 +1,11 @@
 #include "./tox_chat_commands.hpp"
+#include "tox_client_private.hpp"
 
 #include <string>
 #include <map>
 #include <functional>
 #include <mutex>
+#include <string_view>
 #include <tox/tox.h>
 
 namespace ttt {
@@ -81,7 +83,8 @@ void friend_handle_chat_command(uint32_t friend_number, std::string_view message
 		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, "missing command implementation, screen at green!");
 		return;
 	}
-	cmd.fn(friend_number, message);
+
+	cmd.fn(friend_number, message.substr(mc.size()));
 	// TODO: access log
 }
 
@@ -185,7 +188,71 @@ void chat_command_friend_list(uint32_t friend_number, std::string_view params) {
 	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reply);
 }
 
+static std::string_view trim_prefix(std::string_view sv) {
+	while (!sv.empty() && std::isspace(sv.front())) {
+		sv.remove_prefix(1);
+	}
+
+	return sv;
+}
+
+static std::string_view trim_suffix(std::string_view sv) {
+	while (!sv.empty() && std::isspace(sv.back())) {
+		sv.remove_suffix(1);
+	}
+
+	return sv;
+}
+
+static std::string_view trim(std::string_view sv) {
+	return trim_suffix(trim_prefix(sv));
+}
+
+// assumes trimmed string
+static std::vector<std::string_view> cc_split_params(std::string_view params) {
+	std::vector<std::string_view> ret;
+
+	auto pos = params.find_first_of(" \t\n\r");
+	while (pos != std::string_view::npos) {
+		ret.push_back(params.substr(0, pos));
+
+		params = trim_prefix(params.substr(pos));
+
+		pos = params.find_first_of(" \t\n\r");
+	}
+
+	if (!params.empty()) {
+		ret.push_back(params);
+	}
+
+	return ret;
+}
+
 void chat_command_friend_add(uint32_t friend_number, std::string_view params) {
+	params = trim(params);
+	if (params.empty()) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "missing parameters <address>");
+		return;
+	}
+
+	if (params.length() != TOX_ADDRESS_SIZE*2) {
+		std::string reply {"<address> parameter of wrong length " + std::to_string(params.length()) + " should be " + std::to_string(TOX_ADDRESS_SIZE*2)};
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, reply);
+		return;
+	}
+
+	auto params_vec = cc_split_params(params);
+
+	assert(!params_vec.empty()); // trimmed and checked length before
+	if (params_vec.size() != 1) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "too many parameters");
+	}
+
+	if (!tox_add_friend(std::string{params_vec.front()})) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "error adding friend");
+	} else {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "added friend");
+	}
 }
 
 void chat_command_friend_remove(uint32_t friend_number, std::string_view params) {
@@ -195,6 +262,27 @@ void chat_command_friend_permission_set(uint32_t friend_number, std::string_view
 }
 
 void chat_command_friend_permission_get(uint32_t friend_number, std::string_view params) {
+	params = trim(params);
+	if (params.empty()) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "missing parameters <pubkey>");
+		return;
+	}
+
+	if (params.length() != TOX_PUBLIC_KEY_SIZE*2) {
+		std::string reply {"<pubkey> parameter of wrong length " + std::to_string(params.length()) + " should be " + std::to_string(TOX_PUBLIC_KEY_SIZE*2)};
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, reply);
+		return;
+	}
+
+	auto params_vec = cc_split_params(params);
+
+	assert(!params_vec.empty()); // trimmed and checked length before
+	if (params_vec.size() != 1) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "too many parameters");
+	}
+
+	params_vec.front();
+	tox_friend_by_public_key(
 }
 
 } // ttt

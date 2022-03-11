@@ -1,4 +1,5 @@
 #include "./tox_client_private.hpp"
+#include <tox/tox.h>
 
 namespace ttt {
 
@@ -17,18 +18,44 @@ void tox_client_save(void) {
 	ofile.close(); // TODO: do i need this
 }
 
-void tox_add_friend(const std::string& addr) {
-	const std::lock_guard lock(_tox_client_mutex);
+std::vector<uint8_t> hex2bin(const std::string& str) {
+	std::vector<uint8_t> bin{};
+	bin.resize(str.size()/2, 0);
 
-	if (!_tox_client) {
-		std::cerr << "tox_client not running!\n";
-		return;
+	sodium_hex2bin(bin.data(), bin.size(), str.c_str(), str.length(), nullptr, nullptr, nullptr);
+
+	return bin;
+}
+
+std::string bin2hex(const std::vector<uint8_t>& bin) {
+	std::string str{};
+	str.resize(TOX_ADDRESS_SIZE*2, '\0');
+
+	sodium_bin2hex(str.data(), str.size(), bin.data(), bin.size());
+
+	return str;
+}
+
+bool tox_add_friend(const std::string& addr) {
+	//const std::lock_guard lock(_tox_client_mutex); // private
+
+	//if (!_tox_client) {
+		//std::cerr << "tox_client not running!\n";
+		//return;
+	//}
+
+	//std::array<uint8_t, TOX_ADDRESS_SIZE> addr_bin{};
+
+	//sodium_hex2bin(addr_bin.data(), addr_bin.size(), addr.c_str(), addr.length(), nullptr, nullptr, nullptr);
+	auto addr_bin = hex2bin(addr);
+	if (addr_bin.size() != TOX_ADDRESS_SIZE) {
+		return false;
 	}
 
-	std::array<uint8_t, TOX_ADDRESS_SIZE> addr_bin{};
-
 	Tox_Err_Friend_Add e_fa {TOX_ERR_FRIEND_ADD_NULL};
-	tox_friend_add(_tox_client->tox, addr_bin.data(), reinterpret_cast<const uint8_t*>(""), 1, &e_fa);
+	tox_friend_add(_tox_client->tox, addr_bin.data(), reinterpret_cast<const uint8_t*>("i am ttt"), 1, &e_fa);
+
+	return e_fa == TOX_ERR_FRIEND_ADD_OK;
 }
 
 std::string tox_get_own_address(const Tox *tox) {
