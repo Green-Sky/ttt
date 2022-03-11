@@ -29,44 +29,33 @@ std::vector<uint8_t> hex2bin(const std::string& str) {
 
 std::string bin2hex(const std::vector<uint8_t>& bin) {
 	std::string str{};
-	str.resize(TOX_ADDRESS_SIZE*2, '\0');
+	str.resize(bin.size()*2, '?');
 
-	sodium_bin2hex(str.data(), str.size(), bin.data(), bin.size());
+	// HECK, std is 1 larger than size returns ('\0')
+	sodium_bin2hex(str.data(), str.size()+1, bin.data(), bin.size());
 
 	return str;
 }
 
 bool tox_add_friend(const std::string& addr) {
-	//const std::lock_guard lock(_tox_client_mutex); // private
-
-	//if (!_tox_client) {
-		//std::cerr << "tox_client not running!\n";
-		//return;
-	//}
-
-	//std::array<uint8_t, TOX_ADDRESS_SIZE> addr_bin{};
-
-	//sodium_hex2bin(addr_bin.data(), addr_bin.size(), addr.c_str(), addr.length(), nullptr, nullptr, nullptr);
 	auto addr_bin = hex2bin(addr);
 	if (addr_bin.size() != TOX_ADDRESS_SIZE) {
 		return false;
 	}
 
 	Tox_Err_Friend_Add e_fa {TOX_ERR_FRIEND_ADD_NULL};
-	tox_friend_add(_tox_client->tox, addr_bin.data(), reinterpret_cast<const uint8_t*>("i am ttt"), 1, &e_fa);
+	tox_friend_add(_tox_client->tox, addr_bin.data(), reinterpret_cast<const uint8_t*>("i am ttt"), 8, &e_fa);
 
 	return e_fa == TOX_ERR_FRIEND_ADD_OK;
 }
 
 std::string tox_get_own_address(const Tox *tox) {
-	uint8_t self_addr[TOX_ADDRESS_SIZE] = {};
-	tox_self_get_address(tox, self_addr);
-	std::string own_tox_id_stringyfied;
-	own_tox_id_stringyfied.resize(TOX_ADDRESS_SIZE*2 + 1, '\0');
-	sodium_bin2hex(own_tox_id_stringyfied.data(), own_tox_id_stringyfied.size(), self_addr, TOX_ADDRESS_SIZE);
-	own_tox_id_stringyfied.resize(TOX_ADDRESS_SIZE*2); // remove '\0'
+	std::vector<uint8_t> self_addr{};
+	self_addr.resize(TOX_ADDRESS_SIZE);
 
-	return own_tox_id_stringyfied;
+	tox_self_get_address(tox, self_addr.data());
+
+	return bin2hex(self_addr);
 }
 
 void tox_friend_send_message(const uint32_t friend_number, const TOX_MESSAGE_TYPE type, const std::string& msg) {

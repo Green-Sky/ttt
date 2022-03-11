@@ -1,6 +1,7 @@
 #include "./tox_chat_commands.hpp"
 #include "tox_client_private.hpp"
 
+#include <optional>
 #include <string>
 #include <map>
 #include <functional>
@@ -52,6 +53,27 @@ const static std::map<std::string, ChatCommand> chat_commands = {
 	{{"tracker_http_port_get"},	{ToxClient::PermLevel::ADMIN, [](auto, auto){}, ""}},
 };
 
+// TODO: move string utils
+static std::string_view trim_prefix(std::string_view sv) {
+	while (!sv.empty() && std::isspace(sv.front())) {
+		sv.remove_prefix(1);
+	}
+
+	return sv;
+}
+
+static std::string_view trim_suffix(std::string_view sv) {
+	while (!sv.empty() && std::isspace(sv.back())) {
+		sv.remove_suffix(1);
+	}
+
+	return sv;
+}
+
+static std::string_view trim(std::string_view sv) {
+	return trim_suffix(trim_prefix(sv));
+}
+
 void friend_handle_chat_command(uint32_t friend_number, std::string_view message) {
 	// size check was before, so atleast 2 chars
 	if (message[0] != '!') {
@@ -84,8 +106,42 @@ void friend_handle_chat_command(uint32_t friend_number, std::string_view message
 		return;
 	}
 
-	cmd.fn(friend_number, message.substr(mc.size()));
+	cmd.fn(friend_number, trim(message.substr(mc.size())));
 	// TODO: access log
+}
+
+// assumes trimmed string
+static std::vector<std::string_view> cc_split_params(std::string_view params) {
+	std::vector<std::string_view> ret;
+
+	auto pos = params.find_first_of(" \t\n\r");
+	while (pos != std::string_view::npos) {
+		ret.push_back(params.substr(0, pos));
+
+		params = trim_prefix(params.substr(pos));
+
+		pos = params.find_first_of(" \t\n\r");
+	}
+
+	if (!params.empty()) {
+		ret.push_back(params);
+	}
+
+	return ret;
+}
+
+static std::vector<std::string_view> cc_prepare_params(uint32_t friend_number, std::string_view params, size_t expected_count) {
+	auto params_vec = cc_split_params(params);
+	assert(!params_vec.empty());
+	if (params_vec.size() < expected_count) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "too few parameters");
+		return {};
+	}
+	if (params_vec.size() > expected_count) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "too many parameters");
+		return {};
+	}
+	return params_vec;
 }
 
 void chat_command_help(uint32_t friend_number, std::string_view) {
@@ -154,7 +210,7 @@ void chat_command_myaddress(uint32_t friend_number, std::string_view) {
 	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, tox_get_own_address(_tox_client->tox));
 }
 
-void chat_command_friend_list(uint32_t friend_number, std::string_view params) {
+void chat_command_friend_list(uint32_t friend_number, std::string_view) {
 	std::vector<uint32_t> friend_list;
 	friend_list.resize(tox_self_get_friend_list_size(_tox_client->tox));
 	tox_self_get_friend_list(_tox_client->tox, friend_list.data());
@@ -173,14 +229,14 @@ void chat_command_friend_list(uint32_t friend_number, std::string_view params) {
 		//assert(err_f_query == TOX_ERR_FRIEND_QUERY_OK);
 		tox_friend_get_name(_tox_client->tox, friend_list_number, reinterpret_cast<uint8_t*>(f_name.data()), &err_f_query);
 		//assert(err_f_query == TOX_ERR_FRIEND_QUERY_OK);
+		if (err_f_query != TOX_ERR_FRIEND_QUERY_OK) {
+			f_name = "-UNK-";
+		}
 
-		std::array<uint8_t, TOX_PUBLIC_KEY_SIZE> f_pubkey_binary;
+		std::vector<uint8_t> f_pubkey_binary{};
+		f_pubkey_binary.resize(TOX_PUBLIC_KEY_SIZE);
 		tox_friend_get_public_key(_tox_client->tox, friend_list_number, f_pubkey_binary.data(), nullptr);
-
-		std::string f_pubkey;
-		f_pubkey.resize(f_pubkey_binary.size()*2 + 1, '\0');
-		sodium_bin2hex(f_pubkey.data(), f_pubkey.size(), f_pubkey_binary.data(), f_pubkey_binary.size());
-		f_pubkey.resize(f_pubkey_binary.size()*2); // remove '\0'
+		std::string f_pubkey = bin2hex(f_pubkey_binary);
 
 		reply += "  " + f_name + ": " + f_pubkey + "\n";
 	}
@@ -188,48 +244,7 @@ void chat_command_friend_list(uint32_t friend_number, std::string_view params) {
 	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reply);
 }
 
-static std::string_view trim_prefix(std::string_view sv) {
-	while (!sv.empty() && std::isspace(sv.front())) {
-		sv.remove_prefix(1);
-	}
-
-	return sv;
-}
-
-static std::string_view trim_suffix(std::string_view sv) {
-	while (!sv.empty() && std::isspace(sv.back())) {
-		sv.remove_suffix(1);
-	}
-
-	return sv;
-}
-
-static std::string_view trim(std::string_view sv) {
-	return trim_suffix(trim_prefix(sv));
-}
-
-// assumes trimmed string
-static std::vector<std::string_view> cc_split_params(std::string_view params) {
-	std::vector<std::string_view> ret;
-
-	auto pos = params.find_first_of(" \t\n\r");
-	while (pos != std::string_view::npos) {
-		ret.push_back(params.substr(0, pos));
-
-		params = trim_prefix(params.substr(pos));
-
-		pos = params.find_first_of(" \t\n\r");
-	}
-
-	if (!params.empty()) {
-		ret.push_back(params);
-	}
-
-	return ret;
-}
-
 void chat_command_friend_add(uint32_t friend_number, std::string_view params) {
-	params = trim(params);
 	if (params.empty()) {
 		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "missing parameters <address>");
 		return;
@@ -241,11 +256,9 @@ void chat_command_friend_add(uint32_t friend_number, std::string_view params) {
 		return;
 	}
 
-	auto params_vec = cc_split_params(params);
-
-	assert(!params_vec.empty()); // trimmed and checked length before
-	if (params_vec.size() != 1) {
-		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "too many parameters");
+	auto params_vec = cc_prepare_params(friend_number, params, 1);
+	if (params_vec.empty()) {
+		return;
 	}
 
 	if (!tox_add_friend(std::string{params_vec.front()})) {
@@ -256,13 +269,95 @@ void chat_command_friend_add(uint32_t friend_number, std::string_view params) {
 }
 
 void chat_command_friend_remove(uint32_t friend_number, std::string_view params) {
+	if (params.empty()) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "missing parameters <pubkey>");
+		return;
+	}
+
+	auto params_vec = cc_prepare_params(friend_number, params, 1);
+	if (params_vec.empty()) {
+		return;
+	}
+
+	auto pubkey = hex2bin(std::string{params_vec.front()});
+	if (pubkey.size() != TOX_PUBLIC_KEY_SIZE) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "pubkey has the wrong length");
+		return;
+	}
+
+	Tox_Err_Friend_By_Public_Key e_fbpk = TOX_ERR_FRIEND_BY_PUBLIC_KEY_NULL;
+	uint32_t other_friend_number = tox_friend_by_public_key(_tox_client->tox, pubkey.data(), &e_fbpk);
+	if (e_fbpk != TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "friend not found");
+		return;
+	}
+
+	if (!tox_friend_delete(_tox_client->tox, other_friend_number, nullptr)) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "friend remove error?");
+		return;
+	}
+
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "friend removed");
+	return;
+}
+
+static std::optional<ToxClient::PermLevel> str2perm(std::string_view sv) {
+	if (sv == "NONE") {
+		return ToxClient::PermLevel::NONE;
+	} else if (sv == "USER") {
+		return ToxClient::PermLevel::USER;
+	} else if (sv == "ADMIN") {
+		return ToxClient::PermLevel::ADMIN;
+	}
+
+	return std::nullopt;
+}
+
+static const char* perm2str(ToxClient::PermLevel perm) {
+	switch (perm) {
+		case ToxClient::PermLevel::NONE: return "NONE";
+		case ToxClient::PermLevel::USER: return "USER";
+		case ToxClient::PermLevel::ADMIN: return "ADMIN";
+		default: return "UNK";
+	}
 }
 
 void chat_command_friend_permission_set(uint32_t friend_number, std::string_view params) {
+	if (params.empty()) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "missing parameters <pubkey> <permlvl>");
+		return;
+	}
+
+	auto params_vec = cc_prepare_params(friend_number, params, 2);
+	if (params_vec.empty()) {
+		return;
+	}
+
+	auto pubkey = hex2bin(std::string{params_vec.front()});
+	if (pubkey.size() != TOX_PUBLIC_KEY_SIZE) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "pubkey has the wrong length");
+		return;
+	}
+
+	Tox_Err_Friend_By_Public_Key e_fbpk = TOX_ERR_FRIEND_BY_PUBLIC_KEY_NULL;
+	uint32_t other_friend_number = tox_friend_by_public_key(_tox_client->tox, pubkey.data(), &e_fbpk);
+	if (e_fbpk != TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "friend not found");
+		return;
+	}
+
+	auto perm = str2perm(params_vec.back());
+	if (!perm) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "invalid permission");
+		return;
+	}
+
+	_tox_client->friend_perms[other_friend_number] = *perm;
+
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "permission updated");
 }
 
 void chat_command_friend_permission_get(uint32_t friend_number, std::string_view params) {
-	params = trim(params);
 	if (params.empty()) {
 		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "missing parameters <pubkey>");
 		return;
@@ -274,15 +369,29 @@ void chat_command_friend_permission_get(uint32_t friend_number, std::string_view
 		return;
 	}
 
-	auto params_vec = cc_split_params(params);
-
-	assert(!params_vec.empty()); // trimmed and checked length before
-	if (params_vec.size() != 1) {
-		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "too many parameters");
+	auto params_vec = cc_prepare_params(friend_number, params, 1);
+	if (params_vec.empty()) {
+		return;
 	}
 
-	params_vec.front();
-	tox_friend_by_public_key(
+	auto pubkey = hex2bin(std::string{params_vec.front()});
+	if (pubkey.size() != TOX_PUBLIC_KEY_SIZE) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "pubkey has the wrong length");
+		return;
+	}
+
+	Tox_Err_Friend_By_Public_Key e_fbpk = TOX_ERR_FRIEND_BY_PUBLIC_KEY_NULL;
+	uint32_t other_friend_number = tox_friend_by_public_key(_tox_client->tox, pubkey.data(), &e_fbpk);
+	if (e_fbpk != TOX_ERR_FRIEND_BY_PUBLIC_KEY_OK) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "friend not found");
+		return;
+	}
+
+	if (!_tox_client->friend_perms.count(other_friend_number)) {
+		_tox_client->friend_perms[other_friend_number] = _tox_client->friend_default_perm;
+	}
+
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "friend PermLevel: " + std::string{perm2str(_tox_client->friend_perms[other_friend_number])});
 }
 
 } // ttt
