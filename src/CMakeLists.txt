@@ -42,5 +42,6 @@ target_link_libraries(tox_torrent_tunnel
 	torrent_base_lib
 	torrent_tracker_lib
 	toxcore
+	toxext
 )
 

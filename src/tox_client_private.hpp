@@ -2,9 +2,11 @@
 
 #include "./tox_client.hpp"
 
+extern "C" {
 #include <tox/tox.h>
-
-#include <sodium.h>
+#include <toxext.h>
+#include <sodium.h> // TODO: remove?
+}
 
 #include <memory>
 #include <thread>
@@ -26,6 +28,11 @@ struct ToxClient {
 	}
 
 	~ToxClient(void) {
+		if (tox_ext) {
+			toxext_free(tox_ext);
+			tox_ext = nullptr;
+		}
+
 		if (tox) {
 			tox_kill(tox);
 			tox = nullptr;
@@ -34,6 +41,7 @@ struct ToxClient {
 
 
 	Tox* tox = nullptr;
+	ToxExt* tox_ext = nullptr;
 
 	std::string savedata_filename {"ttt.tox"};
 	bool state_dirty_save_soon {false}; // set in callbacks
@@ -47,6 +55,9 @@ struct ToxClient {
 		{0, ADMIN} // HACK: make first friend admin
 	};
 	PermLevel friend_default_perm = USER;
+
+	float announce_interval = 30.f; // secounds
+	std::map<uint32_t, float> friend_announce_timer {};
 
 	// perm level equal or greater
 	bool friend_has_perm(const uint32_t friend_number, const PermLevel perm) {

@@ -3,10 +3,6 @@
 #include "./tox_client_private.hpp"
 #include "./tox_chat_commands.hpp"
 
-#include <tox/tox.h>
-
-#include <sodium.h>
-
 #include <memory>
 #include <string>
 #include <thread>
@@ -193,6 +189,9 @@ static bool tox_client_setup(void) {
 	// print own address
 	std::cout << "created tox instance with addr:" << tox_get_own_address(_tox_client->tox) << "\n";
 
+	_tox_client->tox_ext = toxext_init(_tox_client->tox);
+	// TODO: test null
+
 	tox_client_setup_callbacks(_tox_client->tox);
 
 	// dht bootstrap
@@ -261,10 +260,22 @@ static bool tox_client_setup(void) {
 static void tox_client_thread_fn(void) {
 	const float save_interval = 60.f * 15.f;
 	float save_timer = save_interval/2.f; // initial save
+
+	// TODO: real time
+
 	while (true) {
 		{ // lock sope
 			const std::lock_guard lock(_tox_client_mutex);
 			tox_iterate(_tox_client->tox, nullptr);
+			toxext_iterate(_tox_client->tox_ext); // is this right??
+
+			for (auto& [friend_id, timer] : _tox_client->friend_announce_timer) {
+				timer += 0.005f;
+				if (timer >= _tox_client->announce_interval) {
+					timer = 0.f;
+					// announce
+				}
+			}
 
 			if (save_timer >= save_interval || _tox_client->state_dirty_save_soon) {
 				save_timer = 0.f;
@@ -306,8 +317,12 @@ static void friend_connection_status_cb(Tox *tox, uint32_t friend_number, TOX_CO
 //static void friend_read_receipt_cb(Tox *tox, uint32_t friend_number, uint32_t message_id, void *user_data);
 static void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *message, size_t length, void *) {
 	std::cout << "friend_request_cb\n";
-	// DIRTY HACK
-	tox_friend_add_norequest(tox, public_key, nullptr);
+
+	Tox_Err_Friend_Add e_fa = TOX_ERR_FRIEND_ADD::TOX_ERR_FRIEND_ADD_OK;
+	uint32_t new_fren = tox_friend_add_norequest(tox, public_key, &e_fa);
+	if (e_fa == TOX_ERR_FRIEND_ADD::TOX_ERR_FRIEND_ADD_OK) {
+		_tox_client->friend_announce_timer[new_fren] = 0.f;
+	}
 	_tox_client->state_dirty_save_soon = true;
 }
 
@@ -342,12 +357,13 @@ static void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE
 //static void conference_peer_list_changed_cb(Tox *tox, uint32_t conference_number, void *user_data);
 
 // custom packets
-static void friend_lossy_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *user_data) {
+static void friend_lossy_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void*) {
 	std::cout << "friend_lossy_packet_cb\n";
 }
 
-static void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void *user_data) {
+static void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void*) {
 	std::cout << "friend_lossless_packet_cb\n";
+	toxext_handle_lossless_custom_packet(_tox_client->tox_ext, friend_number, data, length);
 }
 
 } // ttt
