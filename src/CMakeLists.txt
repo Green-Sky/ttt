@@ -35,6 +35,12 @@ add_executable(tox_torrent_tunnel
 	./tox_client.cpp
 	./tox_chat_commands.hpp
 	./tox_chat_commands.cpp
+
+	./ext.hpp
+	./ext.cpp
+	./ext_announce.hpp
+	./ext_announce.cpp
+
 	./standalone.cpp
 )
 

@@ -2,6 +2,9 @@
 
 #include "./tox_client.hpp"
 
+#include "./ext_announce.hpp"
+#include "ext.hpp"
+
 extern "C" {
 #include <tox/tox.h>
 #include <toxext.h>
@@ -43,6 +46,11 @@ struct ToxClient {
 	Tox* tox = nullptr;
 	ToxExt* tox_ext = nullptr;
 
+	// list of tox_ext extentions
+	std::array<std::unique_ptr<ext::ToxClientExtension>, 1> extensions {
+		std::make_unique<ext::ToxExtAnnounce>(),
+	};
+
 	std::string savedata_filename {"ttt.tox"};
 	bool state_dirty_save_soon {false}; // set in callbacks
 
@@ -55,6 +63,10 @@ struct ToxClient {
 		{0, ADMIN} // HACK: make first friend admin
 	};
 	PermLevel friend_default_perm = USER;
+
+	// ext support
+	// if an entry exists, negotiantion is done
+	std::map<uint32_t, bool> friend_compatiple {};
 
 	float announce_interval = 30.f; // secounds
 	std::map<uint32_t, float> friend_announce_timer {};

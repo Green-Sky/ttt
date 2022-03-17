@@ -2,6 +2,7 @@
 
 #include "./tox_client_private.hpp"
 #include "./tox_chat_commands.hpp"
+#include "toxext.h"
 
 #include <memory>
 #include <string>
@@ -189,8 +190,13 @@ static bool tox_client_setup(void) {
 	// print own address
 	std::cout << "created tox instance with addr:" << tox_get_own_address(_tox_client->tox) << "\n";
 
-	_tox_client->tox_ext = toxext_init(_tox_client->tox);
-	// TODO: test null
+	{ // setup ext
+		_tox_client->tox_ext = toxext_init(_tox_client->tox);
+		// TODO: test null
+		for (auto& ext : _tox_client->extensions) {
+			ext->register_ext(_tox_client->tox_ext);
+		}
+	}
 
 	tox_client_setup_callbacks(_tox_client->tox);
 
@@ -251,7 +257,7 @@ static bool tox_client_setup(void) {
 	const char *name = "ttt";
 	tox_self_set_name(_tox_client->tox, reinterpret_cast<const uint8_t*>(name), std::strlen(name), NULL);
 
-	const char *status_message = "toxorrenting";
+	const char *status_message = "toxorrenelling";
 	tox_self_set_status_message(_tox_client->tox, reinterpret_cast<const uint8_t*>(status_message), std::strlen(status_message), NULL);
 
 	return true;
@@ -310,8 +316,15 @@ static void friend_name_cb(Tox *tox, uint32_t friend_number, const uint8_t *name
 //static void friend_status_message_cb(Tox *tox, uint32_t friend_number, const uint8_t *message, size_t length, void *user_data);
 //static void friend_status_cb(Tox *tox, uint32_t friend_number, TOX_USER_STATUS status, void *user_data);
 static void friend_connection_status_cb(Tox *tox, uint32_t friend_number, TOX_CONNECTION connection_status, void *) {
-	std::cout << "friend_connection_status_cb\n";
+	std::cout << "friend_connection_status_cb " << friend_number << "\n";
 	_tox_client->state_dirty_save_soon = true;
+
+	// negotiate toxext extensions
+	if (connection_status != TOX_CONNECTION::TOX_CONNECTION_NONE) {
+		for (auto& ext : _tox_client->extensions) {
+			ext->negotiate_connection(friend_number);
+		}
+	}
 }
 //static void friend_typing_cb(Tox *tox, uint32_t friend_number, bool is_typing, void *user_data);
 //static void friend_read_receipt_cb(Tox *tox, uint32_t friend_number, uint32_t message_id, void *user_data);
@@ -363,7 +376,8 @@ static void friend_lossy_packet_cb(Tox *tox, uint32_t friend_number, const uint8
 
 static void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void*) {
 	std::cout << "friend_lossless_packet_cb\n";
-	toxext_handle_lossless_custom_packet(_tox_client->tox_ext, friend_number, data, length);
+	const auto toxext_ret = toxext_handle_lossless_custom_packet(_tox_client->tox_ext, friend_number, data, length);
+	std::cout << "toxext_handle " << toxext_ret << "\n";
 }
 
 } // ttt
