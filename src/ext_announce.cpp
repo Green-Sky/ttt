@@ -71,7 +71,7 @@ bool AnnounceInfoHashPackage::from(const uint8_t* buff, const size_t buff_size) 
 
 #undef _CHECK
 
-	return true;
+	return curr_buff == buff_end;
 }
 
 // fist 12 bytes are the same for all ttt
@@ -161,7 +161,7 @@ static void announce_recv_callback(
 
 		std::cout << "got " << t << " from " << friend_id << "\n";
 
-		//auto& tdb_ref = torrent_db.torrents[t]; // wtf why does self get set to true????
+		auto& tdb_ref = torrent_db.torrents[t]; // wtf why does self get set to true????
 		// TODO: save friend_number
 		//tdb_ref.torrent_tox_info.
 	}

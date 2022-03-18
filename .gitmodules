@@ -1,3 +1,14 @@
 [submodule "external/toxext/toxext"]
 	path = external/toxext/toxext
 	url = https://github.com/toxext/toxext.git
+[submodule "external/toxcore/c-toxcore"]
+	path = external/toxcore/c-toxcore
+	url = https://github.com/TokTok/c-toxcore.git
+	shallow = true
+	ignore = dirty
+[submodule "external/toxcore/msgpack-c"]
+	path = external/toxcore/msgpack-c
+	url = https://github.com/msgpack/msgpack-c.git
+	branch = c_master
+	shallow = true
+	ignore = dirty

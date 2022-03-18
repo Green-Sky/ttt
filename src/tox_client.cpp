@@ -300,9 +300,12 @@ static void tox_client_thread_fn(void) {
 						time += _tox_client->announce_interval;
 					}
 
+					size_t self_count = 0;
+
 					// update client specific torrent timers
 					for (const auto& [_torrent, t_i] : _tox_client->torrent_db.torrents) {
 						if (t_i.self) { // no relay, so no gossip
+							self_count++;
 							const auto& torrent = _torrent; // why the f*** do i need this?????
 							auto res_it = std::find_if(
 								friend_timer.torrent_timers.cbegin(), friend_timer.torrent_timers.cend(),
@@ -317,6 +320,10 @@ static void tox_client_thread_fn(void) {
 						}
 					}
 
+					if (self_count == 0) {
+						continue; // nothing to announce
+					}
+
 					// sort by time
 					std::sort(
 						friend_timer.torrent_timers.begin(), friend_timer.torrent_timers.end(),
@@ -326,9 +333,9 @@ static void tox_client_thread_fn(void) {
 					);
 
 					// extract the torrent with highest time (since last announce)
-					//for (size_t i = 0; i < friend_torrent_timers.size() && i < ext::AnnounceInfoHashPackage::info_hashes_max_size; i++) {
 					ext::AnnounceInfoHashPackage aihp{};
-					for (size_t i = 0; i < friend_timer.torrent_timers.size() && i < 1; i++) {
+					for (size_t i = 0; i < friend_timer.torrent_timers.size() && i < ext::AnnounceInfoHashPackage::info_hashes_max_size; i++) {
+					//for (size_t i = 0; i < friend_timer.torrent_timers.size() && i < 1; i++) {
 						auto& [time, torrent] = friend_timer.torrent_timers.at(i);
 						std::cout << "announce " << friend_id << " " << torrent << " " << time <<  "s\n";
 						if (torrent.info_hash_v1) {
