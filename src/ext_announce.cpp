@@ -162,8 +162,7 @@ static void announce_recv_callback(
 		std::cout << "got " << t << " from " << friend_id << "\n";
 
 		auto& tdb_ref = torrent_db.torrents[t]; // wtf why does self get set to true????
-		// TODO: save friend_number
-		//tdb_ref.torrent_tox_info.
+		tdb_ref.torrent_tox_info.friends.emplace(friend_id);
 	}
 }
 

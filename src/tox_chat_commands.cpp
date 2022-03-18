@@ -169,6 +169,14 @@ void chat_command_list(uint32_t friend_number, std::string_view) {
 					reply += "v2:" + std::to_string(*entry.first.info_hash_v2) + ";";
 				}
 
+				reply += " self:";
+				reply += entry.second.self ? "true" : "false";
+
+				reply += " friends:";
+				for (const uint32_t f : entry.second.torrent_tox_info.friends) {
+					reply += std::to_string(f) + ",";
+				}
+
 				reply += "\n";
 			}
 	}
