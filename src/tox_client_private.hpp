@@ -3,7 +3,6 @@
 #include "./tox_client.hpp"
 
 #include "./ext_announce.hpp"
-#include "ext.hpp"
 
 extern "C" {
 #include <tox/tox.h>
@@ -51,6 +50,11 @@ struct ToxClient {
 		std::make_unique<ext::ToxExtAnnounce>(),
 	};
 
+	bool announce_send(uint32_t friend_number, const ext::AnnounceInfoHashPackage& aihp) {
+		// lel
+		return static_cast<ext::ToxExtAnnounce*>(extensions.at(0).get())->announce_send(tox_ext, friend_number, aihp);
+	}
+
 	std::string savedata_filename {"ttt.tox"};
 	bool state_dirty_save_soon {false}; // set in callbacks
 
@@ -69,7 +73,11 @@ struct ToxClient {
 	std::map<uint32_t, bool> friend_compatiple {};
 
 	float announce_interval = 30.f; // secounds
-	std::map<uint32_t, float> friend_announce_timer {};
+	struct FriendTimers {
+		float timer = 0.f;
+		std::vector<std::pair<float, Torrent>> torrent_timers{};
+	};
+	std::map<uint32_t, FriendTimers> friend_announce_timer {};
 
 	// perm level equal or greater
 	bool friend_has_perm(const uint32_t friend_number, const PermLevel perm) {

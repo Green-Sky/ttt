@@ -11,18 +11,6 @@
 #include <unordered_map>
 #include <vector>
 
-static std::ostream& operator<<(std::ostream& os, const Torrent& t) {
-	if (t.info_hash_v1) {
-		os << "v1:" << std::to_string(*t.info_hash_v1) << ";";
-	}
-
-	if (t.info_hash_v2) {
-		os << "v2:" << std::to_string(*t.info_hash_v2) << ";";
-	}
-
-	return os;
-}
-
 // src : https://marcoarena.wordpress.com/2017/01/03/string_view-odi-et-amo/
 static std::vector<std::string_view> split(std::string_view str, const char* delims) {
 	std::vector<std::string_view> ret;

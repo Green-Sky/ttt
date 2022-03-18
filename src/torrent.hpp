@@ -107,3 +107,5 @@ struct std::hash<Torrent> {
 	std::size_t operator()(const Torrent& t) const noexcept;
 };
 
+std::ostream& operator<<(std::ostream& os, const Torrent& t);
+

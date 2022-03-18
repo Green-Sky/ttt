@@ -11,7 +11,7 @@ namespace ttt::ext {
 
 class ToxClientExtension {
 	protected:
-		::ToxExtExtension* tee = nullptr;
+		::ToxExtExtension* _tee = nullptr;
 	public:
 		virtual void register_ext(ToxExt* toxext) = 0;
 		void negotiate_connection(uint32_t friend_number);

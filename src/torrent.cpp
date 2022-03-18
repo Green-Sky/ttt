@@ -1,7 +1,7 @@
 #include "./torrent.hpp"
 
 #include <cstdint>
-#include <cassert>
+#include <iostream>
 
 bool Torrent::operator==(const Torrent& rhs) const {
 	if (info_hash_v1) {
@@ -40,5 +40,17 @@ std::size_t std::hash<Torrent>::operator()(const Torrent& t) const noexcept {
 	} else {
 		return 0; // wtf
 	}
+}
+
+std::ostream& operator<<(std::ostream& os, const Torrent& t) {
+	if (t.info_hash_v1) {
+		os << "v1:" << std::to_string(*t.info_hash_v1) << ";";
+	}
+
+	if (t.info_hash_v2) {
+		os << "v2:" << std::to_string(*t.info_hash_v2) << ";";
+	}
+
+	return os;
 }
 

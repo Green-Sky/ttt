@@ -13,18 +13,6 @@
 static TorrentDB torrent_db {};
 static std::mutex torrent_db_mutex;
 
-static std::ostream& operator<<(std::ostream& os, const Torrent& t) {
-	if (t.info_hash_v1) {
-		os << "v1:" << std::to_string(*t.info_hash_v1) << ";";
-	}
-
-	if (t.info_hash_v2) {
-		os << "v2:" << std::to_string(*t.info_hash_v2) << ";";
-	}
-
-	return os;
-}
-
 int main(int argc, char** argv) {
 	(void)argc;
 	(void)argv;
