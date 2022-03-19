@@ -1,11 +1,12 @@
 #include "./ext_announce.hpp"
 
 #include "./tox_client_private.hpp"
+
 #include <variant>
 #include <vector>
+#include <algorithm>
 
 namespace ttt::ext {
-
 
 bool AnnounceInfoHashPackage::to(std::vector<uint8_t>& buff) const {
 	if (info_hashes.empty()) {
@@ -84,11 +85,6 @@ constexpr static uint8_t announce_uuid[16] {
 	0x11, 0x13, 0x31, 0x00,
 };
 
-struct UserData {
-	ttt::ToxClient* tc;
-	ToxExtAnnounce* tea;
-};
-
 static void announce_recv_callback(
 	ToxExtExtension* extension,
 	uint32_t friend_id,
@@ -118,6 +114,10 @@ void ToxExtAnnounce::register_ext(ToxExt* toxext) {
 	std::cout << "III register_ext announce\n";
 }
 
+void ToxExtAnnounce::deregister_ext(ToxExt* toxext) {
+	toxext_deregister(_tee);
+}
+
 bool ToxExtAnnounce::announce_send(ToxExt* tox_ext, uint32_t friend_number, const AnnounceInfoHashPackage& aihp) {
 	std::vector<uint8_t> buff{};
 	if (!aihp.to(buff)) {
@@ -132,6 +132,86 @@ bool ToxExtAnnounce::announce_send(ToxExt* tox_ext, uint32_t friend_number, cons
 
 	auto r = toxext_send(pkg_list);
 	return r == TOXEXT_SUCCESS;
+}
+
+void ToxExtAnnounce::tick(void) {
+	for (const auto& [friend_id, compatiple] : friend_compatiple) {
+		if (!compatiple) {
+			continue;
+		}
+
+		if (tox_friend_get_connection_status(_tox_client->tox, friend_id, nullptr) == TOX_CONNECTION_NONE) {
+			continue; // TODO: better handle offline friends
+		}
+
+		auto& friend_timer = friend_announce_timer[friend_id];
+		friend_timer.timer += 0.005f;
+		if (friend_timer.timer >= announce_interval) {
+			friend_timer.timer = 0.f;
+
+			const std::lock_guard dblock(_tox_client->torrent_db_mutex);
+			if (_tox_client->torrent_db.torrents.empty()) {
+				continue; // nothing to announce
+			}
+
+			// add time
+			for (auto& [time, torrent] : friend_timer.torrent_timers) {
+				time += announce_interval;
+			}
+
+			size_t self_count = 0;
+
+			// update client specific torrent timers
+			for (const auto& [_torrent, t_i] : _tox_client->torrent_db.torrents) {
+				if (t_i.self) { // no relay, so no gossip
+					self_count++;
+					const auto& torrent = _torrent; // why the f*** do i need this?????
+					auto res_it = std::find_if(
+						friend_timer.torrent_timers.cbegin(), friend_timer.torrent_timers.cend(),
+						[&](const auto& it) -> bool {
+							return it.second == torrent;
+						}
+					);
+					if (res_it == friend_timer.torrent_timers.cend()) {
+						const float initial_time = 1000000.f; // HACK: new torrents get time prio
+						friend_timer.torrent_timers.emplace_back(std::make_pair(initial_time, torrent));
+					}
+				}
+			}
+
+			if (self_count == 0) {
+				continue; // nothing to announce
+			}
+
+			// sort by time
+			std::sort(
+				friend_timer.torrent_timers.begin(), friend_timer.torrent_timers.end(),
+				[](const auto& lhs, const auto& rhs) {
+					return lhs.first > rhs.first;
+				}
+			);
+
+			// extract the torrent with highest time (since last announce)
+			ext::AnnounceInfoHashPackage aihp{};
+			for (size_t i = 0; i < friend_timer.torrent_timers.size() && i < ext::AnnounceInfoHashPackage::info_hashes_max_size; i++) {
+			//for (size_t i = 0; i < friend_timer.torrent_timers.size() && i < 1; i++) {
+				auto& [time, torrent] = friend_timer.torrent_timers.at(i);
+				std::cout << "announce " << friend_id << " " << torrent << " " << time <<  "s\n";
+				if (torrent.info_hash_v1) {
+					aihp.info_hashes.push_back(*torrent.info_hash_v1);
+				} else if (torrent.info_hash_v2) {
+					aihp.info_hashes.push_back(*torrent.info_hash_v2);
+				} else {
+					std::cerr << "!!! invalid torrent without info hash :(\n";
+				}
+				time = 0.f;
+			}
+
+			if (!_tox_client->announce_send(friend_id, aihp)) {
+				std::cerr << "!!! failed to announce " << friend_id << "\n";
+			}
+		}
+	}
 }
 
 static void announce_recv_callback(
@@ -174,7 +254,7 @@ static void announce_negotiate_connection_callback(
 ) {
 	std::cout << "III announce_negotiate_connection_callback " << friend_id << " " << compatible << "\n";
 	auto* ud = static_cast<ToxExtAnnounce::UserData*>(userdata);
-	ud->tc->friend_compatiple[friend_id] = compatible;
+	ud->tea->friend_compatiple[friend_id] = compatible;
 }
 
 } // ttt::ext

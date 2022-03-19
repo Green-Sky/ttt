@@ -1,5 +1,4 @@
 #include "./tox_chat_commands.hpp"
-#include "tox_client_private.hpp"
 
 #include <optional>
 #include <string>
@@ -34,8 +33,8 @@ const static std::map<std::string, ChatCommand> chat_commands = {
 	// todo: ngc
 
 	// tunnel
-	{{"tunnel_set_host"},		{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<string> - sets a new tunnel host, default is localhost, but torrentclients tend to ignore loopback addr"}},
-	{{"tunnel_get_host"},		{ToxClient::PermLevel::ADMIN, [](auto, auto){}, ""}},
+	{{"tunnel_host_set"},		{ToxClient::PermLevel::ADMIN, chat_command_tunnel_host_set, "<string> - sets a new tunnel host, default is localhost, but torrentclients tend to ignore loopback addr"}},
+	{{"tunnel_host_get"},		{ToxClient::PermLevel::ADMIN, chat_command_tunnel_host_get, ""}},
 
 	// TODO: move this comment to help
 	// this info is used for remote peers trying to connect. (todo: implement tracker defined port, since it knows)
@@ -399,6 +398,12 @@ void chat_command_friend_permission_get(uint32_t friend_number, std::string_view
 	}
 
 	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "friend PermLevel: " + std::string{perm2str(_tox_client->friend_perms[other_friend_number])});
+}
+
+void chat_command_tunnel_host_set(uint32_t friend_number, std::string_view params) {
+}
+
+void chat_command_tunnel_host_get(uint32_t friend_number, std::string_view params) {
 }
 
 } // ttt

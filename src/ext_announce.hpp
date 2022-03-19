@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <variant>
+#include <map>
 
 namespace ttt {
 	struct ToxClient;
@@ -26,8 +27,23 @@ class ToxExtAnnounce : public ToxClientExtension {
 		ToxExtAnnounce(void) = default;
 
 		void register_ext(ToxExt* toxext) override;
+		void deregister_ext(ToxExt* toxext) override;
 
 		bool announce_send(ToxExt* tox_ext, uint32_t friend_number, const AnnounceInfoHashPackage& aihp);
+
+	public: // tox_client "interface"
+		// ext support
+		// if an entry exists, negotiantion is done
+		std::map<uint32_t, bool> friend_compatiple {};
+
+		float announce_interval = 30.f; // secounds
+		struct FriendTimers {
+			float timer = 0.f;
+			std::vector<std::pair<float, Torrent>> torrent_timers{};
+		};
+		std::map<uint32_t, FriendTimers> friend_announce_timer {};
+
+		void tick(void) override;
 
 	public: // internal for callbacks
 		struct UserData {

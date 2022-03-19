@@ -16,6 +16,9 @@ static uint8_t _single_hex_char_to_value(const char c) {
 	} else {
 		assert(false && "meh invalid char");
 	}
+
+	// TODO: improve
+	return 'g';
 }
 
 template<size_t bytes>

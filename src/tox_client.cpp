@@ -3,8 +3,6 @@
 #include "./tox_client_private.hpp"
 #include "./tox_chat_commands.hpp"
 
-#include <algorithm>
-#include <iterator>
 #include <memory>
 #include <string>
 #include <thread>
@@ -280,78 +278,8 @@ static void tox_client_thread_fn(void) {
 			tox_iterate(_tox_client->tox, nullptr);
 			toxext_iterate(_tox_client->tox_ext); // is this right??
 
-			for (const auto& [friend_id, compatiple] : _tox_client->friend_compatiple) {
-				if (!compatiple) {
-					continue;
-				}
-
-				auto& friend_timer = _tox_client->friend_announce_timer[friend_id];
-				friend_timer.timer += 0.005f;
-				if (friend_timer.timer >= _tox_client->announce_interval) {
-					friend_timer.timer = 0.f;
-
-					const std::lock_guard dblock(_tox_client->torrent_db_mutex);
-					if (_tox_client->torrent_db.torrents.empty()) {
-						continue; // nothing to announce
-					}
-
-					// add time
-					for (auto& [time, torrent] : friend_timer.torrent_timers) {
-						time += _tox_client->announce_interval;
-					}
-
-					size_t self_count = 0;
-
-					// update client specific torrent timers
-					for (const auto& [_torrent, t_i] : _tox_client->torrent_db.torrents) {
-						if (t_i.self) { // no relay, so no gossip
-							self_count++;
-							const auto& torrent = _torrent; // why the f*** do i need this?????
-							auto res_it = std::find_if(
-								friend_timer.torrent_timers.cbegin(), friend_timer.torrent_timers.cend(),
-								[&](const auto& it) -> bool {
-									return it.second == torrent;
-								}
-							);
-							if (res_it == friend_timer.torrent_timers.cend()) {
-								const float initial_time = 1000000.f; // HACK: new torrents get time prio
-								friend_timer.torrent_timers.emplace_back(std::make_pair(initial_time, torrent));
-							}
-						}
-					}
-
-					if (self_count == 0) {
-						continue; // nothing to announce
-					}
-
-					// sort by time
-					std::sort(
-						friend_timer.torrent_timers.begin(), friend_timer.torrent_timers.end(),
-						[](const auto& lhs, const auto& rhs) {
-							return lhs.first > rhs.first;
-						}
-					);
-
-					// extract the torrent with highest time (since last announce)
-					ext::AnnounceInfoHashPackage aihp{};
-					for (size_t i = 0; i < friend_timer.torrent_timers.size() && i < ext::AnnounceInfoHashPackage::info_hashes_max_size; i++) {
-					//for (size_t i = 0; i < friend_timer.torrent_timers.size() && i < 1; i++) {
-						auto& [time, torrent] = friend_timer.torrent_timers.at(i);
-						std::cout << "announce " << friend_id << " " << torrent << " " << time <<  "s\n";
-						if (torrent.info_hash_v1) {
-							aihp.info_hashes.push_back(*torrent.info_hash_v1);
-						} else if (torrent.info_hash_v2) {
-							aihp.info_hashes.push_back(*torrent.info_hash_v2);
-						} else {
-							std::cerr << "!!! invalid torrent without info hash :(\n";
-						}
-						time = 0.f;
-					}
-
-					if (!_tox_client->announce_send(friend_id, aihp)) {
-						std::cerr << "!!! failed to announce " << friend_id << "\n";
-					}
-				}
+			for (const auto& ext : _tox_client->extensions) {
+				ext->tick();
 			}
 
 			if (save_timer >= save_interval || _tox_client->state_dirty_save_soon) {
@@ -406,7 +334,8 @@ static void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t
 	uint32_t new_fren = tox_friend_add_norequest(tox, public_key, &e_fa);
 	if (e_fa == TOX_ERR_FRIEND_ADD::TOX_ERR_FRIEND_ADD_OK) {
 		// wait, but not wait too long
-		_tox_client->friend_announce_timer[new_fren].timer = _tox_client->announce_interval/2.f;
+		//_tox_client->friend_announce_timer[new_fren].timer = _tox_client->announce_interval/2.f;
+		// TODO: i dont need this, do i?
 	}
 	_tox_client->state_dirty_save_soon = true;
 }

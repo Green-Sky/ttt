@@ -3,6 +3,7 @@
 #include "./tox_client.hpp"
 
 #include "./ext_announce.hpp"
+#include "./ext_tunnel_udp.hpp"
 
 extern "C" {
 #include <tox/tox.h>
@@ -46,8 +47,9 @@ struct ToxClient {
 	ToxExt* tox_ext = nullptr;
 
 	// list of tox_ext extentions
-	std::array<std::unique_ptr<ext::ToxClientExtension>, 1> extensions {
+	std::array<std::unique_ptr<ext::ToxClientExtension>, 2> extensions {
 		std::make_unique<ext::ToxExtAnnounce>(),
+		std::make_unique<ext::ToxExtTunnelUDP>(),
 	};
 
 	bool announce_send(uint32_t friend_number, const ext::AnnounceInfoHashPackage& aihp) {
@@ -67,17 +69,6 @@ struct ToxClient {
 		{0, ADMIN} // HACK: make first friend admin
 	};
 	PermLevel friend_default_perm = USER;
-
-	// ext support
-	// if an entry exists, negotiantion is done
-	std::map<uint32_t, bool> friend_compatiple {};
-
-	float announce_interval = 30.f; // secounds
-	struct FriendTimers {
-		float timer = 0.f;
-		std::vector<std::pair<float, Torrent>> torrent_timers{};
-	};
-	std::map<uint32_t, FriendTimers> friend_announce_timer {};
 
 	// perm level equal or greater
 	bool friend_has_perm(const uint32_t friend_number, const PermLevel perm) {
