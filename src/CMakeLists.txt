@@ -51,5 +51,6 @@ target_link_libraries(tox_torrent_tunnel
 	torrent_tracker_lib
 	toxcore
 	toxext
+	zed_net
 )
 

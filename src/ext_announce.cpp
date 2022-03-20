@@ -135,8 +135,8 @@ bool ToxExtAnnounce::announce_send(ToxExt* tox_ext, uint32_t friend_number, cons
 }
 
 void ToxExtAnnounce::tick(void) {
-	for (const auto& [friend_id, compatiple] : friend_compatiple) {
-		if (!compatiple) {
+	for (const auto& [friend_id, compatible] : friend_compatible) {
+		if (!compatible) {
 			continue;
 		}
 
@@ -254,7 +254,7 @@ static void announce_negotiate_connection_callback(
 ) {
 	std::cout << "III announce_negotiate_connection_callback " << friend_id << " " << compatible << "\n";
 	auto* ud = static_cast<ToxExtAnnounce::UserData*>(userdata);
-	ud->tea->friend_compatiple[friend_id] = compatible;
+	ud->tea->friend_compatible[friend_id] = compatible;
 }
 
 } // ttt::ext

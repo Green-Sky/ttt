@@ -33,7 +33,7 @@ const static std::map<std::string, ChatCommand> chat_commands = {
 	// todo: ngc
 
 	// tunnel
-	{{"tunnel_host_set"},		{ToxClient::PermLevel::ADMIN, chat_command_tunnel_host_set, "<string> - sets a new tunnel host, default is localhost, but torrentclients tend to ignore loopback addr"}},
+	{{"tunnel_host_set"},		{ToxClient::PermLevel::ADMIN, chat_command_tunnel_host_set, "<string> - sets a new tunnel host, default is 127.0.0.1, but torrentclients tend to ignore loopback addr"}},
 	{{"tunnel_host_get"},		{ToxClient::PermLevel::ADMIN, chat_command_tunnel_host_get, ""}},
 
 	// TODO: move this comment to help

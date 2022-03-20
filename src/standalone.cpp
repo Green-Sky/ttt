@@ -1,7 +1,9 @@
 #include "./torrent_db.hpp"
 
 #include "./tracker.hpp"
-#include "tox_client.hpp"
+#include "./tox_client.hpp"
+
+#include <zed_net.h>
 
 #include <mutex>
 #include <thread>
@@ -16,6 +18,11 @@ static std::mutex torrent_db_mutex;
 int main(int argc, char** argv) {
 	(void)argc;
 	(void)argv;
+
+	// TODO: error checking
+	// TODO: move this somewhere else
+	// NOTE: this might be superfluous, bc tox and maybe mongoose init windows sockets
+	zed_net_init();
 
 #if 0
 	{ // dummy data
@@ -65,6 +72,8 @@ int main(int argc, char** argv) {
 	}
 
 	ttt::tracker_stop();
+
+	zed_net_shutdown();
 
 	return 0;
 }

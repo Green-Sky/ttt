@@ -218,7 +218,7 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 
 			struct Peer {
 				//std::string ip {"127.0.0.1"};
-				std::string ip {"192.168.1.172"};
+				std::string ip {"192.168.1.200"};
 				//std::string ip {"127.255.1.1"};
 				//uint16_t port {20111};
 				uint16_t port {42048};

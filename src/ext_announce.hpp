@@ -33,8 +33,8 @@ class ToxExtAnnounce : public ToxClientExtension {
 
 	public: // tox_client "interface"
 		// ext support
-		// if an entry exists, negotiantion is done
-		std::map<uint32_t, bool> friend_compatiple {};
+		// if an entry exists, negotiantion has been done at least once
+		std::map<uint32_t, bool> friend_compatible {};
 
 		float announce_interval = 30.f; // secounds
 		struct FriendTimers {
