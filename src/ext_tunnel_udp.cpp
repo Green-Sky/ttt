@@ -42,6 +42,10 @@ void ToxExtTunnelUDP::register_ext(ToxExt* toxext) {
 	);
 	assert(_tee);
 	std::cout << "III register_ext announce\n";
+
+	// default
+	// TODO: load from config
+	zed_net_get_address(&outbound_address, "localhost", 51413);
 }
 
 void ToxExtTunnelUDP::deregister_ext(ToxExt* toxext) {
@@ -151,12 +155,30 @@ void ToxExtTunnelUDP::tick(void) {
 
 void ToxExtTunnelUDP::friend_custom_pkg_cb(uint32_t friend_number, const uint8_t* data, size_t size) {
 	std::cout << "<<< friend_custom_pkg_cb " << friend_number << " " << size << "\n";
-}
+	if (size < 2) {
+		std::cerr << "!!! packet too small\n";
+		return;
+	}
 
-//bool ToxExtTunnelUDP::udp_send(uint32_t friend_number, uint8_t* data, size_t data_size) {
-	//// bc first byte needs to be id, but the udp lib does not
-	//return true;
-//}
+	if (data[0] != packet_id) {
+		std::cerr << "!!! packet id mismatch\n";
+		return;
+	}
+
+	if (!friend_compatible.count(friend_number) || !friend_compatible.at(friend_number)) {
+		std::cerr << "WWW packet from incompatible friend " << friend_number << "\n";
+		return;
+	}
+
+	if (!_tunnels.count(friend_number)) {
+		std::cerr << "!!! packet, but no tunnel yet " << friend_number << "\n";
+		return;
+	}
+
+	auto& tunnel = _tunnels.at(friend_number);
+	// TODO: error check
+	zed_net_udp_socket_send(&(tunnel.s), outbound_address, data+1, size-1);
+}
 
 static void tunnel_udp_recv_callback(
 	ToxExtExtension*,

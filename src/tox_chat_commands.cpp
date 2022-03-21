@@ -1,5 +1,7 @@
 #include "./tox_chat_commands.hpp"
+#include "ext_tunnel_udp.hpp"
 
+#include <limits>
 #include <optional>
 #include <string>
 #include <map>
@@ -38,10 +40,10 @@ const static std::map<std::string, ChatCommand> chat_commands = {
 
 	// TODO: move this comment to help
 	// this info is used for remote peers trying to connect. (todo: implement tracker defined port, since it knows)
-	{{"torrent_client_host_set"}, {ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<string> - sets the host your torrent program is running on, defualt is localhost"}},
-	{{"torrent_client_host_get"}, {ToxClient::PermLevel::ADMIN, [](auto, auto){}, ""}},
-	{{"torrent_client_port_set"}, {ToxClient::PermLevel::ADMIN, [](auto, auto){}, "<string> - sets the port your torrent program is running on, defualt is 51413"}},
-	{{"torrent_client_port_get"}, {ToxClient::PermLevel::ADMIN, [](auto, auto){}, ""}},
+	{{"torrent_client_host_set"}, {ToxClient::PermLevel::ADMIN, chat_command_torrent_client_host_set, "<string> - sets the host your torrent program is running on, defualt is localhost"}},
+	{{"torrent_client_host_get"}, {ToxClient::PermLevel::ADMIN, chat_command_torrent_client_host_get, ""}},
+	{{"torrent_client_port_set"}, {ToxClient::PermLevel::ADMIN, chat_command_torrent_client_port_set, "<string> - sets the port your torrent program is running on, defualt is 51413"}},
+	{{"torrent_client_port_get"}, {ToxClient::PermLevel::ADMIN, chat_command_torrent_client_port_get, ""}},
 
 	// tracker
 	{{"tracker_restart"},		{ToxClient::PermLevel::ADMIN, [](auto, auto){}, "restarts the tracker thread"}},
@@ -401,9 +403,80 @@ void chat_command_friend_permission_get(uint32_t friend_number, std::string_view
 }
 
 void chat_command_tunnel_host_set(uint32_t friend_number, std::string_view params) {
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "NOT IMPLEMENTED");
 }
 
 void chat_command_tunnel_host_get(uint32_t friend_number, std::string_view params) {
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "NOT IMPLEMENTED");
+}
+
+void chat_command_torrent_client_host_set(uint32_t friend_number, std::string_view params) {
+	auto params_vec = cc_prepare_params(friend_number, params, 1);
+	if (params_vec.empty()) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "missing parameters <host> (default is 127.0.0.1)");
+		return;
+	}
+
+	auto* ext_tunnel = static_cast<ext::ToxExtTunnelUDP*>(_tox_client->extensions.at(1).get());
+
+	std::string new_host {params_vec.front()};
+	zed_net_address_t new_addr {};
+	if (zed_net_get_address(&new_addr, new_host.c_str(), ext_tunnel->outbound_address.port) != 0) {
+		// TODO: better error message
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "error setting host");
+		return;
+	}
+
+	ext_tunnel->outbound_address = new_addr;
+
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "set new host " + new_host);
+}
+
+void chat_command_torrent_client_host_get(uint32_t friend_number, std::string_view) {
+	auto* ext_tunnel = static_cast<ext::ToxExtTunnelUDP*>(_tox_client->extensions.at(1).get());
+	const char* host_str = zed_net_host_to_str(ext_tunnel->outbound_address.host);
+	if (host_str == nullptr) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "error getting host");
+		return;
+	}
+
+	std::string reply {"torrent_client host: "};
+	reply += host_str;
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, reply);
+}
+
+void chat_command_torrent_client_port_set(uint32_t friend_number, std::string_view params) {
+	auto params_vec = cc_prepare_params(friend_number, params, 1);
+	if (params_vec.empty()) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "missing parameters <port>");
+		return;
+	}
+
+	std::string new_port {params_vec.front()};
+	uint64_t new_port_num_tmp {0};
+	try {
+		new_port_num_tmp = std::stoul(new_port);
+	} catch(...) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "invalid port");
+		return;
+	}
+
+	if (new_port_num_tmp > std::numeric_limits<uint16_t>::max()) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "invalid port, too large");
+		return;
+	}
+
+	auto* ext_tunnel = static_cast<ext::ToxExtTunnelUDP*>(_tox_client->extensions.at(1).get());
+	ext_tunnel->outbound_address.port = new_port_num_tmp;
+
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "set new port " + std::to_string(new_port_num_tmp));
+}
+
+void chat_command_torrent_client_port_get(uint32_t friend_number, std::string_view) {
+	auto* ext_tunnel = static_cast<ext::ToxExtTunnelUDP*>(_tox_client->extensions.at(1).get());
+	std::string reply {"torrent_client port: "};
+	reply += std::to_string(ext_tunnel->outbound_address.port);
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, reply);
 }
 
 } // ttt

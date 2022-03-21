@@ -33,15 +33,15 @@ class ToxExtTunnelUDP : public ToxClientExtension {
 		// if an entry exists, negotiantion has been done at least once
 		std::map<uint32_t, bool> friend_compatible {};
 
+		// TODO: hide behind api
+		zed_net_address_t outbound_address {};
+
 	// TODO: friend or static?
 	public: // internal for callbacks
 		struct UserData {
 			ttt::ToxClient* tc;
 			ToxExtTunnelUDP* tetu;
 		} ud{};
-
-	private: // tunnel api
-		//bool udp_send(uint32_t friend_number, uint8_t* data, size_t data_size);
 
 	private: // tunnel data
 		struct Tunnel {

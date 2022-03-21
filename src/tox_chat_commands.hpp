@@ -36,5 +36,10 @@ void chat_command_friend_permission_get(uint32_t friend_number, std::string_view
 void chat_command_tunnel_host_set(uint32_t friend_number, std::string_view params);
 void chat_command_tunnel_host_get(uint32_t friend_number, std::string_view params);
 
+void chat_command_torrent_client_host_set(uint32_t friend_number, std::string_view params);
+void chat_command_torrent_client_host_get(uint32_t friend_number, std::string_view params);
+void chat_command_torrent_client_port_set(uint32_t friend_number, std::string_view params);
+void chat_command_torrent_client_port_get(uint32_t friend_number, std::string_view params);
+
 } // ttt
 
