@@ -56,6 +56,8 @@ struct Tracker {
 	std::string http_host {"localhost"};
 	uint16_t http_port {8000};
 
+	std::string peer_host {"localhost"};
+
 	bool stop {false};
 
 	std::thread thread;
@@ -142,7 +144,8 @@ void tracker_set_http_port(const uint16_t port_in_host_order) {
 //{"127.0.0.1"}; // torrent clients discard loopback addresses
 //{"192.168.1.179"}; // so as a workaround you can use your lan address, in this case most torrent programms dont discard it and it should not leave your pc
 void tracker_set_tunnel_host(const std::string& host) {
-	std::cerr << __FILE__ << ":" << __LINE__ << " " << __FUNCTION__ << " NOT IMPLEMENTED!\n";
+	const std::lock_guard lock(_tracker_mutex);
+	_tracker->peer_host = host;
 }
 
 // api end
@@ -218,10 +221,11 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 
 			struct Peer {
 				//std::string ip {"127.0.0.1"};
-				std::string ip {"192.168.1.188"};
+				//std::string ip {"192.168.1.188"};
 				//std::string ip {"127.255.1.1"};
+				std::string ip {_tracker->peer_host};
 				//uint16_t port {20111};
-				uint16_t port {42048};
+				uint16_t port {0};
 			};
 
 			std::vector<Peer> peer_list{};

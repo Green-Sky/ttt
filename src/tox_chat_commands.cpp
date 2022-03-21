@@ -1,5 +1,6 @@
 #include "./tox_chat_commands.hpp"
 #include "ext_tunnel_udp.hpp"
+#include "tracker.hpp"
 
 #include <limits>
 #include <optional>
@@ -403,7 +404,16 @@ void chat_command_friend_permission_get(uint32_t friend_number, std::string_view
 }
 
 void chat_command_tunnel_host_set(uint32_t friend_number, std::string_view params) {
-	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "NOT IMPLEMENTED");
+	auto params_vec = cc_prepare_params(friend_number, params, 1);
+	if (params_vec.empty()) {
+		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "missing parameters <host>");
+		return;
+	}
+
+	std::string new_host {params_vec.front()};
+	tracker_set_tunnel_host(new_host);
+
+	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "set host to " + new_host);
 }
 
 void chat_command_tunnel_host_get(uint32_t friend_number, std::string_view params) {
