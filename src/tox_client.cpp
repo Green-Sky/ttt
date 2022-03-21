@@ -292,8 +292,8 @@ static void tox_client_thread_fn(void) {
 		}
 
 		using namespace std::literals;
-		std::this_thread::sleep_for(5ms);
-		save_timer += 0.005f;
+		std::this_thread::sleep_for(1ms);
+		save_timer += 0.001f;
 	}
 }
 

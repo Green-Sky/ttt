@@ -145,7 +145,7 @@ void ToxExtAnnounce::tick(void) {
 		}
 
 		auto& friend_timer = friend_announce_timer[friend_id];
-		friend_timer.timer += 0.005f;
+		friend_timer.timer += 0.001f;
 		if (friend_timer.timer >= announce_interval) {
 			friend_timer.timer = 0.f;
 

@@ -57,7 +57,8 @@ void ToxExtTunnelUDP::tick(void) {
 		for (auto& [f_id, tun] : _tunnels) {
 			zed_net_address_t addr{};
 
-			const size_t buff_size_max = 1024+1;
+			TOX_MAX_CUSTOM_PACKET_SIZE;
+			const size_t buff_size_max = TOX_MAX_CUSTOM_PACKET_SIZE-2;
 			uint8_t buff[buff_size_max];
 			buff[0] = packet_id; // TODO: tox_lossy_pkg_id
 
@@ -80,7 +81,9 @@ void ToxExtTunnelUDP::tick(void) {
 			std::cout << std::dec << "\n";
 
 			// TODO: error checking
-			tox_friend_send_lossy_packet(ud.tc->tox, f_id, buff, ret+1, nullptr);
+			if (!tox_friend_send_lossy_packet(ud.tc->tox, f_id, buff, ret+1, nullptr)) {
+				std::cerr << "!!! error sending lossy " << f_id << "  << " "" << ret+1 << "\n";
+			}
 		}
 	}
 
