@@ -16,6 +16,8 @@ namespace ttt::ext {
 // after comp check, it just uses lossy directly
 class ToxExtTunnelUDP : public ToxClientExtension {
 	public:
+		static const uint8_t packet_id = 200u;
+
 		ToxExtTunnelUDP(void) = default;
 
 		void register_ext(ToxExt* toxext) override;
@@ -24,7 +26,7 @@ class ToxExtTunnelUDP : public ToxClientExtension {
 		// creates and destroys tunnels
 		void tick(void) override;
 
-		void friend_custom_pkg_cb(uint32_t friend_number, uint8_t* data, size_t size);
+		void friend_custom_pkg_cb(uint32_t friend_number, const uint8_t* data, size_t size);
 
 	public: // tox_client "interface"
 		// ext support

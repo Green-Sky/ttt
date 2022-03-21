@@ -204,10 +204,10 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 
 		{
 			// meh
-			const std::lock_guard tracker_lock(_tracker_mutex);
+			const std::lock_guard tracker_lock{_tracker_mutex};
 
 			// TODO: replace with messaging ?
-			const std::lock_guard mutex_lock(_tracker->torrent_db_mutex);
+			const std::lock_guard mutex_lock{_tracker->torrent_db_mutex};
 			if (!_tracker->torrent_db.torrents.count(t)) {
 				auto& new_entry = _tracker->torrent_db.torrents[t];
 				new_entry.self = true;
@@ -218,29 +218,39 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 
 			struct Peer {
 				//std::string ip {"127.0.0.1"};
-				std::string ip {"192.168.1.200"};
+				std::string ip {"192.168.1.188"};
 				//std::string ip {"127.255.1.1"};
 				//uint16_t port {20111};
 				uint16_t port {42048};
 			};
 
 			std::vector<Peer> peer_list{};
-			peer_list.emplace_back(); // default
+			//peer_list.emplace_back(); // default
+			// fill peer list with tunnels
+			for (const uint32_t f_id : _tracker->torrent_db.torrents[t].torrent_tox_info.friends) {
+				if (!_tracker->torrent_db.peers.count(f_id)) {
+					continue;
+				}
 
-			std::vector<std::string> response_peer_list{};
+				auto& new_peer = peer_list.emplace_back();
+				//new_peer.ip;
+				new_peer.port = _tracker->torrent_db.peers.at(f_id);
+			}
+
+			std::string response_peer_list{};
 			for (const auto& peer : peer_list) {
-				response_peer_list.emplace_back(
+				response_peer_list +=
 					"d" +
 						to_bencode("ip") + to_bencode(peer.ip) +
 						to_bencode("port") + to_bencode(peer.port) +
 					"e"
-				);
+				;
 			}
 
 			// response dict key is plain, value is bencoded
 			std::unordered_map<std::string, std::string> response_dict{
 				{"interval", to_bencode(60)}, // 60s
-				{"peers", "l" + response_peer_list[0] + "e"}, // TODO: more peers
+				{"peers", "l" + response_peer_list + "e"}, // TODO: more peers
 			};
 
 			// eg:

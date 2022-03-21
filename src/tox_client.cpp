@@ -373,6 +373,7 @@ static void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE
 // custom packets
 static void friend_lossy_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void*) {
 	std::cout << "friend_lossy_packet_cb\n";
+	static_cast<ext::ToxExtTunnelUDP*>(_tox_client->extensions.at(1).get())->friend_custom_pkg_cb(friend_number, data, length);
 }
 
 static void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void*) {

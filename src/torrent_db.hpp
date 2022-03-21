@@ -8,7 +8,6 @@
 
 // contains friend/group ids and timestamps
 struct TorrentToxInfo {
-	std::string tmp {"hi"}; // hack, TODO: remove
 	std::set<uint32_t> friends{};
 };
 
@@ -18,6 +17,10 @@ struct TorrentDB {
 		bool self {false};
 		TorrentToxInfo torrent_tox_info {};
 	};
-	std::unordered_map<Torrent, TorrentEntry> torrents;
+	std::unordered_map<Torrent, TorrentEntry> torrents {};
+
+	// mapps friend -> port
+	// ext_tunnel_udp controlled
+	std::unordered_map<uint32_t, uint16_t> peers {};
 };
 

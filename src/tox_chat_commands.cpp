@@ -157,27 +157,27 @@ void chat_command_list(uint32_t friend_number, std::string_view) {
 	std::string reply {"currently indexed:\n"};
 	{
 		const std::lock_guard mutex_lock(_tox_client->torrent_db_mutex);
-			for (const auto& entry : _tox_client->torrent_db.torrents) {
-				reply += "  - ";
+		for (const auto& entry : _tox_client->torrent_db.torrents) {
+			reply += "  - ";
 
-				if (entry.first.info_hash_v1) {
-					reply += "v1:" + std::to_string(*entry.first.info_hash_v1) + ";";
-				}
-
-				if (entry.first.info_hash_v2) {
-					reply += "v2:" + std::to_string(*entry.first.info_hash_v2) + ";";
-				}
-
-				reply += " self:";
-				reply += entry.second.self ? "true" : "false";
-
-				reply += " friends:";
-				for (const uint32_t f : entry.second.torrent_tox_info.friends) {
-					reply += std::to_string(f) + ",";
-				}
-
-				reply += "\n";
+			if (entry.first.info_hash_v1) {
+				reply += "v1:" + std::to_string(*entry.first.info_hash_v1) + ";";
 			}
+
+			if (entry.first.info_hash_v2) {
+				reply += "v2:" + std::to_string(*entry.first.info_hash_v2) + ";";
+			}
+
+			reply += " self:";
+			reply += entry.second.self ? "true" : "false";
+
+			reply += " friends:";
+			for (const uint32_t f : entry.second.torrent_tox_info.friends) {
+				reply += std::to_string(f) + ",";
+			}
+
+			reply += "\n";
+		}
 	}
 	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE::TOX_MESSAGE_TYPE_NORMAL, reply);
 }
@@ -192,9 +192,9 @@ void chat_command_list_magnet(uint32_t friend_number, std::string_view) {
 				//v1: magnet:?xt=urn:btih:<info-hash>&dn=<name>&tr=<tracker-url>&x.pe=<peer-address>
 				if (entry.first.info_hash_v1) {
 					reply += "  magnet:?xt=urn:btih:" + std::to_string(*entry.first.info_hash_v1)
-						//+ "dn=name" // TODO: more meta info
-						+ "tr=http://localhost:8000/announce" // TODO: fetch tacker url
-						//+ "x.pe=localhost:5555" // TODO: even peers
+						//+ "&dn=name" // TODO: more meta info
+						+ "&tr=http://localhost:8000/announce" // TODO: fetch tacker url
+						//+ "&x.pe=localhost:5555" // TODO: even peers
 					;
 
 				}

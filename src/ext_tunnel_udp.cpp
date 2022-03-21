@@ -1,7 +1,7 @@
 #include "./ext_tunnel_udp.hpp"
 
 #include "./tox_client_private.hpp"
-#include "toxcore/tox.h"
+
 #include <vector>
 
 namespace ttt::ext {
@@ -55,7 +55,7 @@ void ToxExtTunnelUDP::tick(void) {
 
 			const size_t buff_size_max = 1024+1;
 			uint8_t buff[buff_size_max];
-			buff[0] = 200; // TODO: tox_lossy_pkg_id
+			buff[0] = packet_id; // TODO: tox_lossy_pkg_id
 
 			int ret = zed_net_udp_socket_receive(&(tun.s), &addr, buff+1, buff_size_max-1);
 
@@ -69,11 +69,11 @@ void ToxExtTunnelUDP::tick(void) {
 			// TODO: check addr maches torrent client setting, otherwise ignore
 
 			// debug !!!
-			std::cout << ">>> got udp ";
+			std::cout << ">>> got udp " << std::hex;
 			for (size_t i = 0; i < (size_t)ret; i++) {
-				std::cout << std::hex << (int)buff[i+1] << " ";
+				std::cout << (int)buff[i+1] << " ";
 			}
-			std::cout << "\n";
+			std::cout << std::dec << "\n";
 
 			// TODO: error checking
 			tox_friend_send_lossy_packet(ud.tc->tox, f_id, buff, ret+1, nullptr);
@@ -90,10 +90,15 @@ void ToxExtTunnelUDP::tick(void) {
 		}
 
 		for (const auto& f_id : to_destroy) {
+			{ // first stop advertising
+				const std::lock_guard mutex_lock{ud.tc->torrent_db_mutex};
+				ud.tc->torrent_db.peers.erase(f_id);
+			}
 			zed_net_socket_close(&_tunnels[f_id].s);
 			std::cout << "III closed tunnel " << f_id << " " << _tunnels[f_id].port << "\n";
 			_tunnels.erase(f_id);
 			friend_compatible.erase(f_id); // also erase from compatible list
+
 		}
 	}
 
@@ -132,7 +137,9 @@ void ToxExtTunnelUDP::tick(void) {
 				continue;
 			}
 
-			// TODO: notify torrent_db of peer
+			// notify torrent_db of peer
+			const std::lock_guard mutex_lock{ud.tc->torrent_db_mutex};
+			ud.tc->torrent_db.peers[f_id] = new_tunnel.port;
 		}
 
 		// clean up
@@ -142,7 +149,7 @@ void ToxExtTunnelUDP::tick(void) {
 	}
 }
 
-void ToxExtTunnelUDP::friend_custom_pkg_cb(uint32_t friend_number, uint8_t* data, size_t size) {
+void ToxExtTunnelUDP::friend_custom_pkg_cb(uint32_t friend_number, const uint8_t* data, size_t size) {
 	std::cout << "<<< friend_custom_pkg_cb " << friend_number << " " << size << "\n";
 }
 
