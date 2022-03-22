@@ -58,7 +58,7 @@ void ToxExtTunnelUDP::tick(void) {
 			zed_net_address_t addr{};
 
 			TOX_MAX_CUSTOM_PACKET_SIZE;
-			const size_t buff_size_max = TOX_MAX_CUSTOM_PACKET_SIZE-2;
+			const size_t buff_size_max = TOX_MAX_CUSTOM_PACKET_SIZE+1;
 			uint8_t buff[buff_size_max];
 			buff[0] = packet_id; // TODO: tox_lossy_pkg_id
 
@@ -68,13 +68,13 @@ void ToxExtTunnelUDP::tick(void) {
 				std::cerr << "!!! error receiving on socket\n";
 				continue;
 			} else if (ret == 0) {
-				std::cerr << "WWW got empty udp packet\n";
 				continue; // no data
 			}
 
 			std::cout << "III got udp " << tun.port << "  " << ret << "\n";
-			if (ret == buff_size_max-1) {
-				std::cerr << "WWW got max sized udp packet\n";
+			if (size_t(ret) >= buff_size_max-2) {
+				std::cerr << "WWW got over max sized udp packet, dropping\n";
+				continue;
 			}
 
 			// TODO: check addr maches torrent client setting, otherwise ignore
