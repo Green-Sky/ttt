@@ -1,6 +1,8 @@
 #include "./tracker.hpp"
 
+extern "C" {
 #include <mongoose.h>
+}
 
 #include <mutex>
 #include <memory>
@@ -158,7 +160,9 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 		//std::string query_str(hm->query.ptr, 0, hm->query.len);
 		//mg_http_reply(c, 200, "Content-Type: text/plain\r\n", "query: %s\n", query_str.c_str());
 
-		auto query_split = split({hm->query.ptr, hm->query.len}, "&");
+		// HACK: copy string first
+		std::string query_str(hm->query.ptr, 0, hm->query.len);
+		auto query_split = split(query_str, "&");
 		std::unordered_map<std::string, std::string> query_map;
 		for (const auto& e_v : query_split) {
 			auto kv = split(e_v, "=");
@@ -171,10 +175,10 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 			// can contain \0
 			if (kv.at(0) == "info_hash") {
 				// easier for internal handling
-				query_map[std::string((kv.at(0)))] = std::to_string(url_decode(kv.at(1)));
+				query_map[std::string(kv.at(0))] = std::to_string(url_decode(kv.at(1)));
 			} else {
 				//query_map[url_decode(kv.at(0))] = url_decode(kv.at(1));
-				query_map[std::string((kv.at(0)))] = kv.at(1);
+				query_map[std::string(kv.at(0))] = kv.at(1);
 			}
 		}
 
@@ -284,10 +288,10 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 	}
 }
 
-static void http_fn(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
+static void http_fn(mg_connection *c, int ev, void *ev_data, void *fn_data) {
 	if (ev == MG_EV_HTTP_MSG) {
 		mg_http_message* hm = (mg_http_message *) ev_data;
-		//std::cerr << "got request:" << std::string(hm->message.ptr, 0, hm->message.len) << "\n";
+		std::cerr << "got request:" << std::string(hm->message.ptr, 0, hm->message.len) << "\n";
 		if (mg_http_match_uri(hm, "/announce")) {
 			http_handle_announce(c, hm);
 
