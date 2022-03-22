@@ -4,6 +4,8 @@
 
 #include <vector>
 
+#define EXT_TUNNEL_UDP_NO_LOG 1
+
 namespace ttt::ext {
 
 // fist 12 bytes are the same for all ttt
@@ -71,7 +73,9 @@ void ToxExtTunnelUDP::tick(void) {
 				continue; // no data
 			}
 
+#ifndef EXT_TUNNEL_UDP_NO_LOG
 			std::cout << "III got udp " << tun.port << "  " << ret << "\n";
+#endif
 			if (size_t(ret) >= buff_size_max-2) {
 				std::cerr << "WWW got over max sized udp packet, dropping\n";
 				continue;
@@ -165,7 +169,9 @@ void ToxExtTunnelUDP::tick(void) {
 }
 
 void ToxExtTunnelUDP::friend_custom_pkg_cb(uint32_t friend_number, const uint8_t* data, size_t size) {
+#ifndef EXT_TUNNEL_UDP_NO_LOG
 	std::cout << "<<< friend_custom_pkg_cb " << friend_number << " " << size << "\n";
+#endif
 	if (size < 2) {
 		std::cerr << "!!! packet too small\n";
 		return;
