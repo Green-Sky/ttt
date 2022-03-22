@@ -68,17 +68,25 @@ void ToxExtTunnelUDP::tick(void) {
 				std::cerr << "!!! error receiving on socket\n";
 				continue;
 			} else if (ret == 0) {
+				std::cerr << "WWW got empty udp packet\n";
 				continue; // no data
+			}
+
+			std::cout << "III got udp " << tun.port << "  " << ret << "\n";
+			if (ret == buff_size_max-1) {
+				std::cerr << "WWW got max sized udp packet\n";
 			}
 
 			// TODO: check addr maches torrent client setting, otherwise ignore
 
 			// debug !!!
+#if 0
 			std::cout << ">>> got udp " << std::hex;
 			for (size_t i = 0; i < (size_t)ret; i++) {
 				std::cout << (int)buff[i+1] << " ";
 			}
 			std::cout << std::dec << "\n";
+#endif
 
 			// TODO: error checking
 			if (!tox_friend_send_lossy_packet(ud.tc->tox, f_id, buff, ret+1, nullptr)) {

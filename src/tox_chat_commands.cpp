@@ -133,7 +133,7 @@ static std::vector<std::string_view> cc_split_params(std::string_view params) {
 
 static std::vector<std::string_view> cc_prepare_params(uint32_t friend_number, std::string_view params, size_t expected_count) {
 	auto params_vec = cc_split_params(params);
-	assert(!params_vec.empty());
+	//assert(!params_vec.empty());
 	if (params_vec.size() < expected_count) {
 		tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "too few parameters");
 		return {};
