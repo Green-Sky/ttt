@@ -194,6 +194,7 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 		if (!query_map.count("info_hash")) {
 			// 101
 			mg_http_reply(c, 101, "Content-Type: text/plain\r\n", "missing info_hash");
+			std::cerr << "!!! announce without info_hash " << query_split.size() << "\n";
 		}
 
 		// create torrent
@@ -206,6 +207,7 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 			t.info_hash_v2 = InfoHashV2{info_hash};
 		} else {
 			mg_http_reply(c, 500, "Content-Type: text/plain\r\n", "bruh what, info_hash bonkers");
+			std::cerr << "!!! announce with invalid info_hash\n";
 		}
 
 
