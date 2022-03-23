@@ -156,6 +156,7 @@ void tracker_set_tunnel_host(const std::string& host) {
 static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 	if (hm->query.ptr == nullptr) {
 		mg_http_reply(c, 101, "Content-Type: text/plain\r\n", "missing info_hash");
+		std::cerr << "!!! announce without info_hash (missing query)\n";
 	} else {
 		//std::string query_str(hm->query.ptr, 0, hm->query.len);
 		//mg_http_reply(c, 200, "Content-Type: text/plain\r\n", "query: %s\n", query_str.c_str());
@@ -217,10 +218,15 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 
 			// TODO: replace with messaging ?
 			const std::lock_guard mutex_lock{_tracker->torrent_db_mutex};
-			if (!_tracker->torrent_db.torrents.count(t)) {
-				auto& new_entry = _tracker->torrent_db.torrents[t];
-				new_entry.self = true;
-				std::cout << "III new info_hash" << t << "\n";
+
+			{ // optinally add to db and set self
+				if (!_tracker->torrent_db.torrents.count(t)) {
+					std::cout << "III new info_hash" << t << "\n";
+				} else {
+					std::cout << "III NOT new info_hash" << t << "\n";
+				}
+				auto& entry = _tracker->torrent_db.torrents[t];
+				entry.self = true;
 			}
 
 			// TODO: timestamp
