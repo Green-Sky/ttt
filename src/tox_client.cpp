@@ -298,23 +298,23 @@ static void tox_client_thread_fn(void) {
 }
 
 // logging
-static void log_cb(Tox *tox, TOX_LOG_LEVEL level, const char *file, uint32_t line, const char *func, const char *message, void *) {
+static void log_cb(Tox*, TOX_LOG_LEVEL level, const char *file, uint32_t line, const char *func, const char *message, void *) {
 	std::cerr << "TOX " << level << " " << file << ":" << line << "(" << func << ") " << message << "\n";
 }
 
 // self
-static void self_connection_status_cb(Tox *tox, TOX_CONNECTION connection_status, void *) {
-	std::cout << "self_connection_status_cb\n";
+static void self_connection_status_cb(Tox*, TOX_CONNECTION connection_status, void *) {
+	std::cout << "self_connection_status_cb " << connection_status << "\n";
 	_tox_client->state_dirty_save_soon = true;
 }
 
 // friend
-static void friend_name_cb(Tox *tox, uint32_t friend_number, const uint8_t *name, size_t length, void *) {
-	std::cout << "friend_name_cb\n";
+static void friend_name_cb(Tox*, uint32_t friend_number, const uint8_t*, size_t, void *) {
+	std::cout << "friend_name_cb " << friend_number << "\n";
 }
 //static void friend_status_message_cb(Tox *tox, uint32_t friend_number, const uint8_t *message, size_t length, void *user_data);
 //static void friend_status_cb(Tox *tox, uint32_t friend_number, TOX_USER_STATUS status, void *user_data);
-static void friend_connection_status_cb(Tox *tox, uint32_t friend_number, TOX_CONNECTION connection_status, void *) {
+static void friend_connection_status_cb(Tox*, uint32_t friend_number, TOX_CONNECTION connection_status, void *) {
 	std::cout << "friend_connection_status_cb " << friend_number << " " << connection_status << "\n";
 	_tox_client->state_dirty_save_soon = true;
 
@@ -327,20 +327,18 @@ static void friend_connection_status_cb(Tox *tox, uint32_t friend_number, TOX_CO
 }
 //static void friend_typing_cb(Tox *tox, uint32_t friend_number, bool is_typing, void *user_data);
 //static void friend_read_receipt_cb(Tox *tox, uint32_t friend_number, uint32_t message_id, void *user_data);
-static void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t *message, size_t length, void *) {
+static void friend_request_cb(Tox *tox, const uint8_t *public_key, const uint8_t*, size_t, void *) {
 	std::cout << "friend_request_cb\n";
 
 	Tox_Err_Friend_Add e_fa = TOX_ERR_FRIEND_ADD::TOX_ERR_FRIEND_ADD_OK;
-	uint32_t new_fren = tox_friend_add_norequest(tox, public_key, &e_fa);
-	if (e_fa == TOX_ERR_FRIEND_ADD::TOX_ERR_FRIEND_ADD_OK) {
-		// wait, but not wait too long
-		//_tox_client->friend_announce_timer[new_fren].timer = _tox_client->announce_interval/2.f;
-		// TODO: i dont need this, do i?
+	tox_friend_add_norequest(tox, public_key, &e_fa);
+	if (e_fa != TOX_ERR_FRIEND_ADD::TOX_ERR_FRIEND_ADD_OK) {
+		std::cerr << "!!! error adding friend " << e_fa << "\n";
 	}
 	_tox_client->state_dirty_save_soon = true;
 }
 
-static void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE type, const uint8_t *message, size_t length, void *) {
+static void friend_message_cb(Tox*, uint32_t friend_number, TOX_MESSAGE_TYPE, const uint8_t *message, size_t length, void *) {
 	std::cout << "friend_message_cb\n";
 
 	if (!_tox_client->friend_has_perm(friend_number, ToxClient::PermLevel::USER)) {
@@ -362,21 +360,12 @@ static void friend_message_cb(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE
 //static void file_recv_cb(Tox *tox, uint32_t friend_number, uint32_t file_number, uint32_t kind, uint64_t file_size, const uint8_t *filename, size_t filename_length, void *user_data);
 //static void file_recv_chunk_cb(Tox *tox, uint32_t friend_number, uint32_t file_number, uint64_t position, const uint8_t *data, size_t length, void *user_data);
 
-// conference
-//static void conference_invite_cb(Tox *tox, uint32_t friend_number, TOX_CONFERENCE_TYPE type, const uint8_t *cookie, size_t length, void *user_data);
-//static void conference_connected_cb(Tox *tox, uint32_t conference_number, void *user_data);
-//static void conference_message_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number, TOX_MESSAGE_TYPE type, const uint8_t *message, size_t length, void *user_data);
-//static void conference_title_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number, const uint8_t *title, size_t length, void *user_data);
-//static void conference_peer_name_cb(Tox *tox, uint32_t conference_number, uint32_t peer_number, const uint8_t *name, size_t length, void *user_data);
-//static void conference_peer_list_changed_cb(Tox *tox, uint32_t conference_number, void *user_data);
-
 // custom packets
-static void friend_lossy_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void*) {
-	//std::cout << "friend_lossy_packet_cb\n";
+static void friend_lossy_packet_cb(Tox*, uint32_t friend_number, const uint8_t *data, size_t length, void*) {
 	static_cast<ext::ToxExtTunnelUDP*>(_tox_client->extensions.at(1).get())->friend_custom_pkg_cb(friend_number, data, length);
 }
 
-static void friend_lossless_packet_cb(Tox *tox, uint32_t friend_number, const uint8_t *data, size_t length, void*) {
+static void friend_lossless_packet_cb(Tox*, uint32_t friend_number, const uint8_t *data, size_t length, void*) {
 	std::cout << "friend_lossless_packet_cb\n";
 	const auto toxext_ret = toxext_handle_lossless_custom_packet(_tox_client->tox_ext, friend_number, data, length);
 	if (toxext_ret != 0) {

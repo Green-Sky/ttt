@@ -416,7 +416,7 @@ void chat_command_tunnel_host_set(uint32_t friend_number, std::string_view param
 	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "set host to " + new_host);
 }
 
-void chat_command_tunnel_host_get(uint32_t friend_number, std::string_view params) {
+void chat_command_tunnel_host_get(uint32_t friend_number, std::string_view) {
 	tox_friend_send_message(friend_number, TOX_MESSAGE_TYPE_NORMAL, "NOT IMPLEMENTED");
 }
 

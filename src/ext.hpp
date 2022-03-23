@@ -13,6 +13,7 @@ class ToxClientExtension {
 	protected:
 		::ToxExtExtension* _tee = nullptr;
 	public:
+		virtual ~ToxClientExtension(void) {}
 		// TODO: replace with ctr/dtr
 		virtual void register_ext(ToxExt* toxext) = 0;
 		virtual void deregister_ext(ToxExt* toxext) = 0;

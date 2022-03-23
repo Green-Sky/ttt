@@ -8,7 +8,7 @@
 #include <cctype>
 #include <cassert>
 
-static uint8_t _single_hex_char_to_value(const char c) {
+static inline uint8_t _single_hex_char_to_value(const char c) {
 	if (c >= '0' && c <= '9') {
 		return c - '0';
 	} else if (c >= 'a' && c <= 'f') {
