@@ -299,7 +299,7 @@ static void http_handle_announce(mg_connection* c, mg_http_message* hm) {
 static void http_fn(mg_connection *c, int ev, void *ev_data, void *fn_data) {
 	if (ev == MG_EV_HTTP_MSG) {
 		mg_http_message* hm = (mg_http_message *) ev_data;
-		std::cerr << "got request:" << std::string(hm->message.ptr, 0, hm->message.len) << "\n";
+		//std::cerr << "got request:" << std::string(hm->message.ptr, 0, hm->message.len) << "\n";
 		if (mg_http_match_uri(hm, "/announce")) {
 			http_handle_announce(c, hm);
 

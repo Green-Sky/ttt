@@ -81,7 +81,7 @@ void ToxExtTunnelUDP2::tick(void) {
 				continue;
 			}
 
-			if (buff_size_max <= single_pkg_size_max) {
+			if (size_t(socket_bytes_read) <= single_pkg_size_max) {
 				buff[0] = packet_id; // TODO: tox_lossy_pkg_id
 
 				// TODO: check addr maches torrent client setting, otherwise ignore
@@ -106,10 +106,10 @@ void ToxExtTunnelUDP2::tick(void) {
 				for (size_t i = 1; i < size_t(socket_bytes_read+1); i += TOXEXT_MAX_SEGMENT_SIZE-1) {
 					uint8_t is_last_frag = socket_bytes_read-i <= TOXEXT_MAX_SEGMENT_SIZE-1;
 
-					// HACK: double segment append should not cause new packet, so the first byte is "is_last_frag"
-					// the api does not guarantie this behavior
-					toxext_segment_append(pkg_list, _tee, &is_last_frag, 1);
-					toxext_segment_append(pkg_list, _tee, buff + i, std::min<int64_t>(TOXEXT_MAX_SEGMENT_SIZE-1, socket_bytes_read-i));
+					std::vector<uint8_t> tmp_buff{};
+					tmp_buff.push_back(is_last_frag);
+					tmp_buff.insert(tmp_buff.end(), buff + i, buff + i + std::min<int64_t>(TOXEXT_MAX_SEGMENT_SIZE-1, socket_bytes_read-i));
+					toxext_segment_append(pkg_list, _tee, tmp_buff.data(), tmp_buff.size());
 				}
 
 				auto ret = toxext_send(pkg_list);
@@ -232,8 +232,8 @@ static void tunnel_udp_recv_callback(
 ) {
 	std::cout << "III tunnel_udp_recv_callback " << friend_id << " " << size << "(/" << TOXEXT_MAX_SEGMENT_SIZE << ")\n";
 	// we got a multipart?
-	auto* ud = static_cast<ToxExtTunnelUDP::UserData*>(userdata);
-	ud->tetu->friend_custom_pkg_cb(friend_id, reinterpret_cast<const uint8_t*>(data), size);
+	auto* ud = static_cast<ToxExtTunnelUDP2::UserData*>(userdata);
+	ud->tetu->friend_custom_pkg_cb(friend_id, reinterpret_cast<const uint8_t*>(data), size, true);
 }
 
 static void tunnel_udp_negotiate_connection_callback(
@@ -243,7 +243,7 @@ static void tunnel_udp_negotiate_connection_callback(
 	ToxExtPacketList* response_packet_list
 ) {
 	std::cout << "III tunnel_udp_negotiate_connection_callback " << friend_id << " " << compatible << "\n";
-	auto* ud = static_cast<ToxExtTunnelUDP::UserData*>(userdata);
+	auto* ud = static_cast<ToxExtTunnelUDP2::UserData*>(userdata);
 	ud->tetu->friend_compatible[friend_id] = compatible;
 }
 

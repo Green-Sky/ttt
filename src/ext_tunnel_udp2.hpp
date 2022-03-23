@@ -27,7 +27,7 @@ class ToxExtTunnelUDP2 : public ToxClientExtension {
 		// creates and destroys tunnels
 		void tick(void) override;
 
-		void friend_custom_pkg_cb(uint32_t friend_number, const uint8_t* data, size_t size, bool lossless = false);
+		void friend_custom_pkg_cb(uint32_t friend_number, const uint8_t* data, size_t size, bool lossless);
 
 	public: // tox_client "interface"
 		// ext support
