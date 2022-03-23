@@ -42,6 +42,8 @@ add_executable(tox_torrent_tunnel
 	./ext_announce.cpp
 	./ext_tunnel_udp.hpp
 	./ext_tunnel_udp.cpp
+	./ext_tunnel_udp2.hpp
+	./ext_tunnel_udp2.cpp
 
 	./standalone.cpp
 )

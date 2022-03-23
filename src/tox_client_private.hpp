@@ -4,6 +4,7 @@
 
 #include "./ext_announce.hpp"
 #include "./ext_tunnel_udp.hpp"
+#include "./ext_tunnel_udp2.hpp"
 
 extern "C" {
 #include <tox/tox.h>
@@ -49,7 +50,8 @@ struct ToxClient {
 	// list of tox_ext extentions
 	std::array<std::unique_ptr<ext::ToxClientExtension>, 2> extensions {
 		std::make_unique<ext::ToxExtAnnounce>(),
-		std::make_unique<ext::ToxExtTunnelUDP>(),
+		//std::make_unique<ext::ToxExtTunnelUDP>(),
+		std::make_unique<ext::ToxExtTunnelUDP2>(),
 	};
 
 	bool announce_send(uint32_t friend_number, const ext::AnnounceInfoHashPackage& aihp) {

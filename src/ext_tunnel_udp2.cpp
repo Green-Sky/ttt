@@ -1,10 +1,10 @@
-#include "./ext_tunnel_udp.hpp"
+#include "./ext_tunnel_udp2.hpp"
 
 #include "./tox_client_private.hpp"
 
 #include <vector>
 
-#define EXT_TUNNEL_UDP_NO_LOG 1
+//#define EXT_TUNNEL_UDP_NO_LOG 1
 
 namespace ttt::ext {
 
@@ -33,7 +33,7 @@ static void tunnel_udp_negotiate_connection_callback(
 	ToxExtPacketList* response_packet_list
 );
 
-void ToxExtTunnelUDP::register_ext(ToxExt* toxext) {
+void ToxExtTunnelUDP2::register_ext(ToxExt* toxext) {
 	ud.tc = _tox_client.get();
 	ud.tetu = this;
 
@@ -43,57 +43,79 @@ void ToxExtTunnelUDP::register_ext(ToxExt* toxext) {
 		tunnel_udp_negotiate_connection_callback
 	);
 	assert(_tee);
-	std::cout << "III register_ext tunnel_udp\n";
+	std::cout << "III register_ext tunnel_udp2\n";
 
 	// default
 	// TODO: load from config
 	zed_net_get_address(&outbound_address, "localhost", 51413);
 }
 
-void ToxExtTunnelUDP::deregister_ext(ToxExt* toxext) {
+void ToxExtTunnelUDP2::deregister_ext(ToxExt* toxext) {
 	toxext_deregister(_tee);
 }
 
-void ToxExtTunnelUDP::tick(void) {
+void ToxExtTunnelUDP2::tick(void) {
 	{ // iterate every tunnel
 		for (auto& [f_id, tun] : _tunnels) {
 			zed_net_address_t addr{};
 
-			const size_t buff_size_max = TOX_MAX_CUSTOM_PACKET_SIZE+1;
+			const size_t buff_size_max = 2048;
+			const size_t single_pkg_size_max = TOX_MAX_CUSTOM_PACKET_SIZE-1;
 			uint8_t buff[buff_size_max];
-			buff[0] = packet_id; // TODO: tox_lossy_pkg_id
 
-			int ret = zed_net_udp_socket_receive(&(tun.s), &addr, buff+1, buff_size_max-1);
+			int socket_bytes_read = zed_net_udp_socket_receive(&(tun.s), &addr, buff+1, buff_size_max-1);
 
-			if (ret < 0) {
+			if (socket_bytes_read < 0) {
 				std::cerr << "!!! error receiving on socket\n";
 				continue;
-			} else if (ret == 0) {
+			} else if (socket_bytes_read == 0) {
 				continue; // no data
 			}
 
+
 #ifndef EXT_TUNNEL_UDP_NO_LOG
-			std::cout << "III got udp " << tun.port << "  " << ret << "\n";
+			std::cout << "III got udp " << tun.port << "  " << socket_bytes_read << "\n";
 #endif
-			if (size_t(ret) >= buff_size_max-2) {
+			if (size_t(socket_bytes_read) == buff_size_max-1) {
 				std::cerr << "WWW got over max sized udp packet, dropping\n";
 				continue;
 			}
 
-			// TODO: check addr maches torrent client setting, otherwise ignore
+			if (buff_size_max <= single_pkg_size_max) {
+				buff[0] = packet_id; // TODO: tox_lossy_pkg_id
 
-			// debug !!!
+				// TODO: check addr maches torrent client setting, otherwise ignore
+
+				// debug !!!
 #if 0
-			std::cout << ">>> got udp " << std::hex;
-			for (size_t i = 0; i < (size_t)ret; i++) {
-				std::cout << (int)buff[i+1] << " ";
-			}
-			std::cout << std::dec << "\n";
+				std::cout << ">>> got udp " << std::hex;
+				for (size_t i = 0; i < (size_t)ret; i++) {
+					std::cout << (int)buff[i+1] << " ";
+				}
+				std::cout << std::dec << "\n";
 #endif
 
-			// TODO: error checking
-			if (!tox_friend_send_lossy_packet(ud.tc->tox, f_id, buff, ret+1, nullptr)) {
-				std::cerr << "!!! error sending lossy " << f_id << "  " << ret+1 << "\n";
+				// TODO: propper error checking
+				if (!tox_friend_send_lossy_packet(ud.tc->tox, f_id, buff, socket_bytes_read+1, nullptr)) {
+					std::cerr << "!!! error sending lossy " << f_id << "  " << socket_bytes_read+1 << "\n";
+				}
+			} else { // large pkg
+				// TODO: getting tox_ext that way is bad
+				auto* pkg_list = toxext_packet_list_create(ud.tc->tox_ext, f_id);
+
+				for (size_t i = 1; i < size_t(socket_bytes_read+1); i += TOXEXT_MAX_SEGMENT_SIZE-1) {
+					uint8_t is_last_frag = socket_bytes_read-i <= TOXEXT_MAX_SEGMENT_SIZE-1;
+
+					// HACK: double segment append should not cause new packet, so the first byte is "is_last_frag"
+					// the api does not guarantie this behavior
+					toxext_segment_append(pkg_list, _tee, &is_last_frag, 1);
+					toxext_segment_append(pkg_list, _tee, buff + i, std::min<int64_t>(TOXEXT_MAX_SEGMENT_SIZE-1, socket_bytes_read-i));
+				}
+
+				auto ret = toxext_send(pkg_list);
+				if (ret != TOXEXT_SUCCESS) {
+					std::cerr << "!!! error sending toxext pkg list " << f_id << "\n";
+				}
 			}
 		}
 	}
@@ -167,17 +189,12 @@ void ToxExtTunnelUDP::tick(void) {
 	}
 }
 
-void ToxExtTunnelUDP::friend_custom_pkg_cb(uint32_t friend_number, const uint8_t* data, size_t size) {
+void ToxExtTunnelUDP2::friend_custom_pkg_cb(uint32_t friend_number, const uint8_t* data, size_t size, bool lossless) {
 #ifndef EXT_TUNNEL_UDP_NO_LOG
-	std::cout << "<<< friend_custom_pkg_cb " << friend_number << " " << size << "\n";
+	std::cout << "<<< friend_custom_pkg_cb " << friend_number << " " << lossless << " " << size << "\n";
 #endif
-	if (size < 2) {
+	if (size < 1 + (lossless ? 1 : 0)) {
 		std::cerr << "!!! packet too small\n";
-		return;
-	}
-
-	if (data[0] != packet_id) {
-		std::cerr << "!!! packet id mismatch\n";
 		return;
 	}
 
@@ -192,8 +209,19 @@ void ToxExtTunnelUDP::friend_custom_pkg_cb(uint32_t friend_number, const uint8_t
 	}
 
 	auto& tunnel = _tunnels.at(friend_number);
-	// TODO: error check
-	zed_net_udp_socket_send(&(tunnel.s), outbound_address, data+1, size-1);
+	if (lossless) {
+		// reassemble
+		bool is_last_frag = data[0] != 0;
+		tunnel.reasseble_buffer.insert(tunnel.reasseble_buffer.end(), data+1, data+size);
+		if (is_last_frag) {
+			// TODO: error check
+			zed_net_udp_socket_send(&(tunnel.s), outbound_address, tunnel.reasseble_buffer.data(), tunnel.reasseble_buffer.size());
+			tunnel.reasseble_buffer.clear();
+		}
+	} else {
+		// TODO: error check
+		zed_net_udp_socket_send(&(tunnel.s), outbound_address, data, size);
+	}
 }
 
 static void tunnel_udp_recv_callback(
@@ -202,7 +230,10 @@ static void tunnel_udp_recv_callback(
 	size_t size, void* userdata,
 	struct ToxExtPacketList* response_packet_list
 ) {
-	std::cout << "III tunnel_udp_recv_callback??\n";
+	std::cout << "III tunnel_udp_recv_callback " << friend_id << " " << size << "(/" << TOXEXT_MAX_SEGMENT_SIZE << ")\n";
+	// we got a multipart?
+	auto* ud = static_cast<ToxExtTunnelUDP::UserData*>(userdata);
+	ud->tetu->friend_custom_pkg_cb(friend_id, reinterpret_cast<const uint8_t*>(data), size);
 }
 
 static void tunnel_udp_negotiate_connection_callback(

@@ -362,7 +362,21 @@ static void friend_message_cb(Tox*, uint32_t friend_number, TOX_MESSAGE_TYPE, co
 
 // custom packets
 static void friend_lossy_packet_cb(Tox*, uint32_t friend_number, const uint8_t *data, size_t length, void*) {
-	static_cast<ext::ToxExtTunnelUDP*>(_tox_client->extensions.at(1).get())->friend_custom_pkg_cb(friend_number, data, length);
+	auto* tunnel_ext = static_cast<ext::ToxExtTunnelUDP2*>(_tox_client->extensions.at(1).get());
+
+	if (length < 2) {
+		std::cerr << "!!! packet too small\n";
+		return;
+	}
+
+	if (data[0] != tunnel_ext->packet_id) {
+		std::cerr << "!!! packet id mismatch\n";
+		return;
+	}
+
+	tunnel_ext->friend_custom_pkg_cb(friend_number, data, length);
+
+	//static_cast<ext::ToxExtTunnelUDP*>(_tox_client->extensions.at(1).get())->friend_custom_pkg_cb(friend_number, data, length);
 }
 
 static void friend_lossless_packet_cb(Tox*, uint32_t friend_number, const uint8_t *data, size_t length, void*) {
