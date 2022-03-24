@@ -104,11 +104,18 @@ void ToxExtTunnelUDP2::tick(void) {
 				auto* pkg_list = toxext_packet_list_create(ud.tc->tox_ext, f_id);
 
 				for (size_t i = 1; i < size_t(socket_bytes_read+1); i += TOXEXT_MAX_SEGMENT_SIZE-1) {
-					uint8_t is_last_frag = socket_bytes_read-i <= TOXEXT_MAX_SEGMENT_SIZE-1;
+					const size_t frag_buff_size = std::min<int64_t>(TOXEXT_MAX_SEGMENT_SIZE-1, socket_bytes_read-(i-1));
+
+					const uint8_t* frag_buff = buff + i;
+					const uint8_t* frag_buff_end = frag_buff + frag_buff_size; // end points to the element past the last one
+
+					uint8_t is_last_frag = frag_buff_size < TOXEXT_MAX_SEGMENT_SIZE-1;
 
 					std::vector<uint8_t> tmp_buff{};
 					tmp_buff.push_back(is_last_frag);
-					tmp_buff.insert(tmp_buff.end(), buff + i, buff + i + std::min<int64_t>(TOXEXT_MAX_SEGMENT_SIZE-1, (socket_bytes_read-i) + 1));
+
+					tmp_buff.insert(tmp_buff.end(), frag_buff, frag_buff_end);
+
 					toxext_segment_append(pkg_list, _tee, tmp_buff.data(), tmp_buff.size());
 				}
 
