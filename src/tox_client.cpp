@@ -374,7 +374,7 @@ static void friend_lossy_packet_cb(Tox*, uint32_t friend_number, const uint8_t *
 		return;
 	}
 
-	tunnel_ext->friend_custom_pkg_cb(friend_number, data, length, false);
+	tunnel_ext->friend_custom_pkg_cb(friend_number, data+1, length-1, false);
 
 	//static_cast<ext::ToxExtTunnelUDP*>(_tox_client->extensions.at(1).get())->friend_custom_pkg_cb(friend_number, data, length);
 }
