@@ -108,7 +108,7 @@ void ToxExtTunnelUDP2::tick(void) {
 
 					std::vector<uint8_t> tmp_buff{};
 					tmp_buff.push_back(is_last_frag);
-					tmp_buff.insert(tmp_buff.end(), buff + i, buff + i + std::min<int64_t>(TOXEXT_MAX_SEGMENT_SIZE-1, socket_bytes_read-i));
+					tmp_buff.insert(tmp_buff.end(), buff + i, buff + i + std::min<int64_t>(TOXEXT_MAX_SEGMENT_SIZE-1, (socket_bytes_read-i) + 1));
 					toxext_segment_append(pkg_list, _tee, tmp_buff.data(), tmp_buff.size());
 				}
 
@@ -209,13 +209,22 @@ void ToxExtTunnelUDP2::friend_custom_pkg_cb(uint32_t friend_number, const uint8_
 	}
 
 	auto& tunnel = _tunnels.at(friend_number);
+
 	if (lossless) {
 		// reassemble
 		bool is_last_frag = data[0] != 0;
-		tunnel.reasseble_buffer.insert(tunnel.reasseble_buffer.end(), data+1, data+size);
+
+		// "remove" first byte
+		data++;
+		size--;
+
+		tunnel.reasseble_buffer.insert(tunnel.reasseble_buffer.end(), data, data+size);
+
 		if (is_last_frag) {
 			// TODO: error check
 			zed_net_udp_socket_send(&(tunnel.s), outbound_address, tunnel.reasseble_buffer.data(), tunnel.reasseble_buffer.size());
+			std::cout << "III reassebled " << friend_number << " " << tunnel.reasseble_buffer.size() << "\n";
+
 			tunnel.reasseble_buffer.clear();
 		}
 	} else {
